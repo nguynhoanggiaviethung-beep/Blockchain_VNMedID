@@ -29,3 +29,14 @@
 
 # Snapshot cheatcodes output
 /snapshots
+
+node_modules/
+blockchain/node_modules/
+
+cache/
+artifacts/
+blockchain/cache/
+blockchain/artifacts/
+
+.env
+.env.local
