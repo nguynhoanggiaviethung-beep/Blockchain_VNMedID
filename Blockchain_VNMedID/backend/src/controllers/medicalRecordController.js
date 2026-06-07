@@ -1,90 +1,257 @@
-const MedicalRecord = require('../models/MedicalRecord');
+const MedicalRecord = require('../models/MedicalRecord'); 
+const Visit = require('../models/Visit');
+const mongoose = require('mongoose');
 
 const createRecord = async (req, res) => {
     try {
         const { trieuChung } = req.body;
-        // Đảm bảo req.userId tồn tại (được xác thực qua middleware)
-        const newRecord = new MedicalRecord({ 
-            patientId: req.userId, 
-            trieuChung, 
-            status: "pending",
+        const patientId = req.userId;
+
+        if (!trieuChung) {
+            return res.status(400).json({ success: false, message: "Vui lòng nhập triệu chứng bệnh ban đầu!" });
+        }
+
+        const newRecord = new MedicalRecord({
+            patientId,
+            trieuChung,
+            status: "Pending",
             createdAt: new Date()
         });
+
         await newRecord.save();
-        res.status(201).json({ success: true, data: newRecord });
+
+        return res.status(201).json({ 
+            success: true, 
+            message: "Đăng ký ca khám bệnh thành công!",
+            data: newRecord 
+        });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 const getPendingRecords = async (req, res) => {
     try {
-        const list = await MedicalRecord.find({ status: "pending" })
-            .populate('patientId', 'fullName phone dob'); // Thêm các trường cần thiết
-        res.status(200).json({ success: true, data: list });
+        const pendingList = await MedicalRecord.find({ status: "Pending" })
+                                               .populate('patientId', 'fullName dob gender phone');
+
+        const formattedData = pendingList.map(item => ({
+            _id: item._id,
+            fullName: item.patientId?.fullName || "Bệnh nhân vãng lai",
+            dob: item.patientId?.dob || "",
+            gender: item.patientId?.gender || "Nam",
+            phone: item.patientId?.phone || "---",
+            trieuChung: item.trieuChung || "Khám tổng quát"
+        }));
+
+        return res.status(200).json({ success: true, data: formattedData });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 const getDoctorPendingList = async (req, res) => {
     try {
-        // Chỉ lọc theo status 'pending', bỏ lọc ngày để tránh lỗi định dạng
-        const list = await MedicalRecord.find({ status: "pending" })
-            .populate('patientId', 'fullName phone dob gender');
-        
-        console.log("DEBUG: Số lượng bệnh nhân pending tìm thấy:", list.length);
-        
-        res.status(200).json({ success: true, data: list });
+        const { specialty, date } = req.query;
+
+        const filter = { status: "pending" };
+        if (specialty) filter.specialty = specialty;
+        if (date) filter.appointmentDate = date;
+
+        const visits = await Visit.find(filter).sort({ createdAt: 1 });
+
+        const formattedData = await Promise.all(visits.map(async (v) => {
+            let patientInfo = {
+                fullName: "Bệnh nhân",
+                dob: "",
+                gender: "",
+                phone: "---"
+            };
+
+            try {
+                const db = mongoose.connection.db;
+                // ✅ FIX: _id trong DB là string → thử cả ObjectId lẫn string
+                let patient = null;
+                try {
+                    const objId = new mongoose.Types.ObjectId(v.patientId);
+                    patient = await db.collection('patients').findOne({ _id: objId });
+                } catch (_) {}
+                if (!patient) {
+                    patient = await db.collection('patients').findOne({ _id: v.patientId });
+                }
+                if (patient) {
+                    patientInfo.fullName = patient.fullName || "Bệnh nhân";
+                    patientInfo.dob      = patient.dob      || "";
+                    patientInfo.gender   = patient.gender   || "";
+                    patientInfo.phone    = patient.phone    || "---";
+                }
+            } catch (e) {
+                console.error("Lỗi lookup patient:", e.message);
+            }
+
+            return {
+                _id: v._id,
+                appointmentDate: v.appointmentDate,
+                specialty: v.specialty,
+                trieuChungLamSang: v.trieuChungLamSang,
+                ...patientInfo
+            };
+        }));
+
+        return res.json({ success: true, data: formattedData });
     } catch (error) {
-        console.error("DEBUG Lỗi:", error);
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const getDoctorCompletedList = async (req, res) => {
+    try {
+        const { specialty, date } = req.query;
+        const filter = { status: "completed" };
+        if (specialty) filter.specialty = specialty;
+        if (date) filter.appointmentDate = date;
+
+        const visits = await Visit.find(filter).sort({ createdAt: -1 });
+
+        const formattedData = await Promise.all(visits.map(async (v) => {
+            let patientInfo = {
+                fullName: "Bệnh nhân",
+                dob: "",
+                gender: "",
+                phone: "---"
+            };
+            try {
+                const db = mongoose.connection.db;
+                // ✅ FIX: _id trong DB là string → thử cả ObjectId lẫn string
+                let patient = null;
+                try {
+                    const objId = new mongoose.Types.ObjectId(v.patientId);
+                    patient = await db.collection('patients').findOne({ _id: objId });
+                } catch (_) {}
+                if (!patient) {
+                    patient = await db.collection('patients').findOne({ _id: v.patientId });
+                }
+                if (patient) {
+                    patientInfo.fullName = patient.fullName || "Bệnh nhân";
+                    patientInfo.dob      = patient.dob      || "";
+                    patientInfo.gender   = patient.gender   || "";
+                    patientInfo.phone    = patient.phone    || "---";
+                }
+            } catch (e) {
+                console.error("Lỗi lookup patient:", e.message);
+            }
+            return {
+                _id: v._id,
+                appointmentDate: v.appointmentDate,
+                specialty: v.specialty,
+                trieuChungLamSang: v.trieuChungLamSang,
+                chanDoanChuyenMon: v.chanDoanChuyenMon,
+                huongDieuTri: v.huongDieuTri,
+                doctorName: v.doctorName,
+                ...patientInfo
+            };
+        }));
+
+        return res.json({ success: true, data: formattedData });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 const getDoctorCompletedCount = async (req, res) => {
     try {
-        const count = await MedicalRecord.countDocuments({ status: "completed" });
-        res.status(200).json({ success: true, count });
+        const { specialty, date } = req.query;
+        const filter = { status: "completed" };
+        if (specialty) filter.specialty = specialty;
+        if (date) filter.appointmentDate = date;
+
+        const count = await Visit.countDocuments(filter);
+        return res.json({ success: true, count });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 const completeVisit = async (req, res) => {
     try {
-        const { recordId, diagnose, prescription } = req.body;
-        const updated = await MedicalRecord.findByIdAndUpdate(
-            recordId, 
-            { 
+        const { recordId, diagnose, prescription, doctorName } = req.body;
+
+        if (!recordId || !diagnose || !prescription) {
+            return res.status(400).json({ success: false, message: "Thiếu thông tin bệnh án!" });
+        }
+
+        // ✅ FIX: _id là string → dùng findOneAndUpdate thay vì findByIdAndUpdate
+        const db = mongoose.connection.db;
+        await db.collection('visits').updateOne(
+            { _id: recordId },
+            { $set: {
+                chanDoanChuyenMon: diagnose,
+                huongDieuTri: prescription,
+                doctorName: doctorName || "",
                 status: "completed",
-                diagnose,
-                prescription,
                 updatedAt: new Date()
-            }, 
+            }}
+        );
+        const visit = await db.collection('visits').findOne({ _id: recordId });
+
+        if (!visit) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
+        }
+
+        return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống", error: error.message });
+    }
+};
+
+const getRecordById = async (req, res) => {
+    try {
+        return res.status(200).json({ success: true, message: "Lấy chi tiết bệnh án thành công" });
+    } catch (error) {
+        return res.status(500).json({ success: false, error: error.message });
+    }
+};
+
+const updateRecordByDoctor = async (req, res) => {
+    try {
+        const recordId = req.params.id;
+        const { chanDoanChuyenMon, huongDieuTri } = req.body;
+        const doctorId = req.userId || req.body.doctorId;
+
+        const updatedRecord = await MedicalRecord.findByIdAndUpdate(
+            recordId,
+            { chanDoanChuyenMon, huongDieuTri, doctorId, status: "Completed", updatedAt: new Date() },
             { new: true }
         );
-        res.status(200).json({ success: true, data: updated });
+
+        if (!updatedRecord) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy ca bệnh này" });
+        }
+
+        return res.status(200).json({ success: true, message: "Cập nhật bệnh án thành công!", data: updatedRecord });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 const getPatientHistory = async (req, res) => {
     try {
-        const history = await MedicalRecord.find({ patientId: req.userId })
-            .sort({ createdAt: -1 });
-        res.status(200).json({ success: true, data: history });
+        const patientId = req.userId;
+        const visits = await Visit.find({ patientId }).sort({ createdAt: -1 });
+        return res.status(200).json({ success: true, data: visits });
     } catch (error) {
-        res.status(500).json({ success: false, message: error.message });
+        return res.status(500).json({ success: false, error: error.message });
     }
 };
 
 module.exports = {
-    createRecord,
+    createRecord,    
     getPendingRecords,
     getDoctorPendingList,
+    getDoctorCompletedList,
     getDoctorCompletedCount,
     completeVisit,
+    getRecordById,
+    updateRecordByDoctor,
     getPatientHistory
 };

@@ -176,7 +176,6 @@ const Login = () => {
 
       // 3. Phân tách và lưu trữ thông tin hiển thị theo vai trò cá nhân
       if (userRole === "doctor") {
-        // Thử chạy qua hàm map tài liệu bác sĩ nếu có cấu trúc mapper
         let doctorName = "Bác sĩ VNmedID";
         let doctorSpecialty = "Da liễu";
         let doctorLicense = "BS-123450";
@@ -194,30 +193,29 @@ const Login = () => {
           }
         }
 
-        // Ưu tiên đọc trực tiếp từ key tiếng Việt/tiếng Anh có sẵn trong loginData phòng khi Backend đã gộp dữ liệu
         doctorName = loginData?.["Họ và tên"] || loginData?.fullName || loginData?.email?.split('@')[0] || doctorName;
         doctorSpecialty = loginData?.["Chuyên Khoa"] || loginData?.specialty || doctorSpecialty;
         doctorLicense = loginData?.["Mã Bác sĩ"] || loginData?.["Giấy phép hành nghề"] || loginData?.licenseNumber || doctorLicense;
 
-        // Lưu thông tin sạch vào LocalStorage để DoctorDashboard lấy trực tiếp ra xài
         localStorage.setItem("fullName", doctorName);
         localStorage.setItem("chuyenKhoa", doctorSpecialty);
         localStorage.setItem("maBacSi", doctorLicense);
       } else {
-        // Nếu là bệnh nhân hoặc admin
         const patientName = loginData?.fullName || loginData?.["Họ và tên"] || loginData?.email?.split('@')[0] || "Người dùng VNmedID";
         localStorage.setItem("fullName", patientName);
       }
 
-      setSuccess(true);
-
+      // 4. ✅ FIX: Navigate ngay, không dùng setTimeout để tránh ProtectedRoute
+      //    redirect về login trước khi localStorage được set xong
       const roleRedirect = {
         patient: "/dashboard/patient",
         doctor: "/dashboard/doctor",
         admin: "/dashboard/admin",
       };
-      
-      setTimeout(() => navigate(roleRedirect[userRole] || "/"), 1000);
+
+      setSuccess(true);
+      navigate(roleRedirect[userRole] || "/");
+
     } catch (error) {
       console.error("Lỗi xử lý đăng nhập:", error);
       const msg = error.response?.data?.message || error.message || "Đăng nhập thất bại. Vui lòng kiểm tra lại tài khoản, mật khẩu!";

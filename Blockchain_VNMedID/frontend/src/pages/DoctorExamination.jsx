@@ -99,24 +99,38 @@ const DoctorExamination = () => {
 
   const handleUpdate = async (e) => {
     e.preventDefault();
+
     const stringifiedPrescription = prescriptions.map((p, i) => 
-      `${i+1}. ${p.tenThuoc} - SL: ${p.soLuong} viên (${p.soNgay} ngày) [Buổi: ${p.thoiGianUong.join(', ') || 'Chưa chọn'} | Thời điểm: ${p.thoiDiemAn}]`
+      `${i+1}. ${p.tenThuoc} - SL: ${p.soLuong} viên (${p.soNgay} ngày) [Buổi: ${p.thoiGianUong.join(', ') || 'Chưa chọn'} | Thời điểm: ${p.thoiDiemAn}]`
     ).join('\n');
 
+    // ✅ FIX: Gọi đúng endpoint /complete với recordId để cập nhật status → "completed"
     const payload = {
-      chanDoanChuyenMon: doctorInput.chanDoanChuyenMon,
-      huongDieuTri: `[ĐƠN THUỐC ĐIỆN TỬ]\n${stringifiedPrescription}\n\n[LỜI DẶN]: ${doctorInput.huongDieuTri}`
+      recordId: id,
+      diagnose: doctorInput.chanDoanChuyenMon,
+      prescription: `[ĐƠN THUỐC ĐIỆN TỬ]\n${stringifiedPrescription}\n\n[LỜI DẶN]: ${doctorInput.huongDieuTri}`,
+      doctorName: localStorage.getItem('fullName') || ''
     };
 
     try {
-      await fetch(`${BASE_URL}/medical-records/${id}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${localStorage.getItem('token')}` },
+      const res = await fetch(`${BASE_URL}/medical-records/complete`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json', 
+          'Authorization': `Bearer ${localStorage.getItem('token')}` 
+        },
         body: JSON.stringify(payload)
       });
-      alert("Đã đồng bộ chẩn đoán và đơn thuốc điện tử thành công.");
+
+      const data = await res.json();
+      if (data.success) {
+        alert("✅ Đã lưu bệnh án và cập nhật trạng thái thành công!");
+        navigate('/dashboard/doctor');
+      } else {
+        alert("Lỗi: " + (data.message || "Không thể lưu bệnh án"));
+      }
     } catch (error) {
-      alert("Hệ thống ghi nhận hồ sơ thành công.");
+      alert("Lỗi kết nối server: " + error.message);
     }
   };
 
@@ -125,7 +139,7 @@ const DoctorExamination = () => {
   return (
     <div style={{ minHeight: '100vh', background: '#F8FAFC', fontFamily: '"Segoe UI", Tahoma, Geneva, Verdana, sans-serif', paddingBottom: 60 }}>
       
-      {/* HEADER TỐI GIẢN */}
+      {/* HEADER */}
       <div style={{ background: '#0F172A', color: '#fff', padding: '16px 40px', display: 'flex', justifyContent: 'space-between', alignItems: 'center', boxShadow: '0 2px 4px rgba(0,0,0,0.05)' }}>
         <h2 style={{ margin: 0, fontSize: 20, fontWeight: 700, letterSpacing: '0.5px' }}>HỒ SƠ KHÁM BỆNH CHI TIẾT</h2>
         <button onClick={() => navigate(-1)} style={{ background: '#F1F5F9', color: '#0F172A', border: 'none', padding: '8px 18px', borderRadius: 6, cursor: 'pointer', fontSize: 14, fontWeight: '600' }}>
@@ -194,7 +208,6 @@ const DoctorExamination = () => {
               {prescriptions.map((prescription, index) => (
                 <div key={index} style={{ display: 'flex', flexDirection: 'column', gap: 14, background: '#F8FAFC', padding: '20px', borderRadius: 10, border: '1px solid #E2E8F0', position: 'relative' }}>
                   
-                  {/* HÀNG THỨ NHẤT: TÊN THUỐC + SỐ LƯỢNG */}
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', width: '100%' }}>
                     <div style={{ flex: '2 1 400px', position: 'relative' }}>
                       <div style={{ fontSize: 13, color: '#334155', fontWeight: '700', marginBottom: 6 }}>Tên thuốc / Hàm lượng</div>
@@ -229,10 +242,8 @@ const DoctorExamination = () => {
                     </div>
                   </div>
 
-                  {/* HÀNG THỨ HAI: BUỔI UỐNG + THỜI ĐIỂM ĂN + SỐ NGÀY */}
                   <div style={{ display: 'flex', gap: 16, flexWrap: 'wrap', width: '100%', alignItems: 'flex-end' }}>
                     
-                    {/* Chọn Buổi uống */}
                     <div style={{ flex: '3 1 340px' }}>
                       <div style={{ fontSize: 13, color: '#334155', fontWeight: '700', marginBottom: 6 }}>Các buổi cần uống:</div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -242,7 +253,6 @@ const DoctorExamination = () => {
                           if (session === 'Trưa') activeColor = '#059669';
                           if (session === 'Chiều') activeColor = '#D97706';
                           if (session === 'Tối') activeColor = '#4F46E5';
-                          
                           return (
                             <button
                               key={session} type="button"
@@ -256,7 +266,6 @@ const DoctorExamination = () => {
                       </div>
                     </div>
 
-                    {/* Chọn thời điểm ăn */}
                     <div style={{ flex: '4 1 420px' }}>
                       <div style={{ fontSize: 13, color: '#334155', fontWeight: '700', marginBottom: 6 }}>Thời điểm uống thuốc:</div>
                       <div style={{ display: 'flex', gap: 6 }}>
@@ -280,7 +289,6 @@ const DoctorExamination = () => {
                       </div>
                     </div>
 
-                    {/* Chọn Số Ngày */}
                     <div style={{ flex: '2 1 220px' }}>
                       <div style={{ fontSize: 13, color: '#334155', fontWeight: '700', marginBottom: 6 }}>Số ngày uống:</div>
                       <div style={{ display: 'flex', gap: 4, alignItems: 'center' }}>
@@ -309,7 +317,6 @@ const DoctorExamination = () => {
 
                   </div>
 
-                  {/* NÚT XÓA DÒNG THUỐC */}
                   {prescriptions.length > 1 && (
                     <button
                       type="button" onClick={() => removeDrugRow(index)}
@@ -328,14 +335,14 @@ const DoctorExamination = () => {
           <div style={{ background: '#fcf7bf', borderRadius: 12, padding: 24, marginBottom: 30, border: '1px solid #eaeff5', borderLeft: '6px solid #022784' }}>
             <div style={{ fontSize: 16, fontWeight: '700', color: '#001e65', marginBottom: 12, textTransform: 'uppercase' }}>3. Lời dặn dò & Chế độ sinh hoạt</div>
             <textarea 
-              style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #CBD5E1', padding: 14, borderRadius: 8, fontSize: 15, outline: 'none', minHeight: 70, fontFamily: 'Arial, sans-serif', fontWeight: '700', color: '#f8f8f8' }}
+              style={{ width: '100%', boxSizing: 'border-box', border: '1px solid #CBD5E1', padding: 14, borderRadius: 8, fontSize: 15, outline: 'none', minHeight: 70, fontFamily: 'Arial, sans-serif', fontWeight: '700', color: '#333' }}
               rows="2" value={doctorInput.huongDieuTri}
               onChange={(e) => setDoctorInput({...doctorInput, huongDieuTri: e.target.value})}
               placeholder="Nhập lời dặn bác sĩ tại đây..."
             />
           </div>
 
-          {/* NÚT SUBMIT LƯU HỒ SƠ */}
+          {/* NÚT SUBMIT */}
           <div style={{ display: 'flex', justifyContent: 'center' }}>
             <button type="submit" style={{ background: '#0F172A', color: '#ffffff', border: 'none', padding: '16px 80px', borderRadius: 10, fontSize: 18, fontWeight: 'bold', cursor: 'pointer', width: '100%', maxWidth: 500 }}>
               LƯU & CẬP NHẬT HỒ SƠ BỆNH ÁN

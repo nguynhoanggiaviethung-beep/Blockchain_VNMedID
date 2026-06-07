@@ -115,11 +115,11 @@ const getPatientById = async (req, res) => {
 // ==========================================
 const updatePatient = async (req, res) => {
     try {
-        const { fullName, dob, gender, phone, address } = req.body;
+        const { fullName, dob, gender, phone, address, nhomMau, tienSuBenh, diUng, trieuChung, ghiChu } = req.body;
 
         const benhNhan = await Patient.findByIdAndUpdate(
             req.params.id,
-            { fullName, dob, gender, phone, address },
+            { fullName, dob, gender, phone, address, nhomMau, tienSuBenh, diUng, trieuChung, ghiChu },
             { new: true, runValidators: true }
         );
 

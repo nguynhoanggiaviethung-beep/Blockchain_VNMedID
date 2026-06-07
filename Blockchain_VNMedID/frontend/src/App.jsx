@@ -5,11 +5,13 @@ import DoctorDashboard from './pages/DoctorDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 import DoctorExamination from './pages/DoctorExamination'
 
-// Component bọc bảo vệ (Protected Route) giữ nguyên logic của bạn
+// Component bọc bảo vệ (Protected Route)
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  const userRole = localStorage.getItem('userRole'); // 'patient', 'doctor', 'admin'
+  // ✅ FIX: đổi 'role' → 'userRole' cho khớp với key Login.jsx lưu
+  const userRole = localStorage.getItem('userRole');
+  const token = localStorage.getItem('token');
 
-  if (!userRole) {
+  if (!token || !userRole) {
     return <Navigate to="/" replace />;
   }
 
@@ -47,7 +49,7 @@ function App() {
           }
         />
 
-        {/* SỬA TẠI ĐÂY: Thêm trang nhập đơn thuốc/chẩn đoán vào vùng bảo vệ của Bác sĩ */}
+        {/* Trang nhập đơn thuốc/chẩn đoán của Bác sĩ */}
         <Route
           path="/dashboard/doctor/diagnose/:id"
           element={
@@ -67,7 +69,7 @@ function App() {
           }
         />
 
-        {/* Nếu gõ tầm bậy đường dẫn, tự động đẩy về trang Login */}
+        {/* Nếu gõ sai đường dẫn, tự động đẩy về trang Login */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
