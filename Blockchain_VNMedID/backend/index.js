@@ -22,7 +22,23 @@ app.use('/api/v1/invoices',        require('./API Format/src/routes/invoiceRoute
 app.use('/api/v1/access',          require('./API Format/src/routes/accessRoutes'));
 app.use('/api/v1/payments',        require('./API Format/src/routes/paymentRoutes'));
 app.use('/api/v1/auth',            require('./API Format/src/routes/authRoutes'));
+// ── Thêm vào file routes của bạn (vd: routes/index.js hoặc app.js) ──────────
 
+const visitController = require('./controllers/visitController');
+const shiftController = require('./controllers/shiftController');
+
+// Visit / Lượt khám
+router.post  ('/visits',          visitController.bookAppointment);   // BN đặt lịch
+router.get   ('/visits/my',       visitController.getMyAppointments); // BN xem lịch của mình
+router.get   ('/visits',          visitController.getAllVisits);       // Admin xem tất cả
+router.put   ('/visits/:id',      visitController.updateVisit);       // Admin cập nhật
+router.delete('/visits/:id',      visitController.deleteVisit);       // Admin xóa
+
+// Shift / Ca trực bác sĩ
+router.post  ('/shifts',          shiftController.createShift);
+router.get   ('/shifts',          shiftController.getAllShifts);
+router.put   ('/shifts/:id',      shiftController.updateShift);
+router.delete('/shifts/:id',      shiftController.deleteShift);
 // Kết nối MongoDB
 mongoose.connect('mongodb://localhost:27017/vnmedid')
   .then(() => {
