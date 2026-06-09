@@ -1,42 +1,49 @@
-# Node modules
-/node_modules
+# Dependencies
 
-# Compilation output
-/dist
-
-# pnpm deploy output
-/bundle
-
-# Hardhat Build Artifacts
-/artifacts
-
-# Hardhat compilation (v2) support directory
-/cache
-
-# Typechain output
-/types
+node_modules/
+*/node_modules/
 
 # Environment files
+
 .env
 .env.*
 !.env.example
 
-# Hardhat coverage reports
-/coverage
+# Build output
 
-# Gas snapshot files
-/.gas-snapshot
+dist/
+build/
+bundle/
 
-# Snapshot cheatcodes output
-/snapshots
+# Hardhat generated files
 
-node_modules/
+artifacts/
+cache/
+types/
+coverage/
+gas-report.txt
+.gas-snapshot
+snapshots/
+
+# Blockchain subfolder generated files
+
+blockchain/artifacts/
+blockchain/cache/
+blockchain/types/
+blockchain/coverage/
 blockchain/node_modules/
 
-cache/
-artifacts/
-blockchain/cache/
-blockchain/artifacts/
+# Logs
 
-.env
-.env.local
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# OS / Editor
+
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
