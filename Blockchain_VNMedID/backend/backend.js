@@ -45,7 +45,7 @@ app.get('/api/v1/drugs/search', async (req, res) => {
   }
 });
 
-// 4. ROUTES
+require('./src/models/Shift');
 app.use('/api/v1/auth',            require('./src/routes/authRoutes'));
 app.use('/api/v1/patients',        require('./src/routes/patientRoutes'));
 app.use('/api/v1/doctors',         require('./src/routes/doctorRoutes'));

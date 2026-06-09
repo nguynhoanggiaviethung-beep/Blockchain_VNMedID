@@ -23,13 +23,12 @@ export default function DoctorDashboard() {
   const [completedList, setCompletedList] = useState([])
   const [loading, setLoading] = useState(true)
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
-  const [activeFilter, setActiveFilter] = useState("pending") // pending | completed | all
+  const [activeFilter, setActiveFilter] = useState("pending")
 
   const [selectedPatient, setSelectedPatient] = useState(null)
   const [diagnose, setDiagnose] = useState('')
   const [submitting, setSubmitting] = useState(false)
 
-  // State kê đơn
   const [treatmentDays, setTreatmentDays] = useState(7)
   const [drugList, setDrugList] = useState([{ name: "", suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
   const [doctorNote, setDoctorNote] = useState("")
@@ -38,26 +37,24 @@ export default function DoctorDashboard() {
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
 
-  // Lấy danh sách bệnh nhân chờ khám
+  // ✅ Lấy danh sách bệnh nhân từ /visits (đúng endpoint)
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
       setLoading(true)
-      const [year, month, day] = dateQuery.split('-')
-      const formattedDate = `${day}-${month}-${year}`
 
       const [pendingRes, completedRes] = await Promise.all([
-        axiosOriginal.get(`${BASE_URL}/medical-records/doctor/pending`, {
+        axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { specialty: specialtyName, date: formattedDate }
+          params: { status: 'pending', specialty: specialtyName, date: dateQuery }
         }),
-        axiosOriginal.get(`${BASE_URL}/medical-records/doctor/completed-list`, {
+        axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { specialty: specialtyName, date: formattedDate }
+          params: { status: 'completed', specialty: specialtyName, date: dateQuery }
         })
       ])
 
-      setPatientList(pendingRes?.data?.success ? pendingRes.data.data : [])
-      setCompletedList(completedRes?.data?.success ? completedRes.data.data : [])
+      setPatientList(pendingRes?.data?.data?.records || [])
+      setCompletedList(completedRes?.data?.data?.records || [])
     } catch (error) {
       console.error("Lỗi lấy danh sách:", error)
       setPatientList([])
@@ -102,7 +99,6 @@ export default function DoctorDashboard() {
     setDoctorNote("")
   }
 
-  // Tìm thuốc openFDA
   const searchDrug = async (index, keyword) => {
     const updated = [...drugList]
     updated[index].name = keyword
@@ -153,17 +149,22 @@ export default function DoctorDashboard() {
 
     setSubmitting(true)
     try {
-      const response = await axiosOriginal.post(`${BASE_URL}/medical-records/complete`, {
-        recordId: selectedPatient._id,
-        diagnose,
-        prescription: prescriptionText,
-        doctorName: doctorInfo.fullName
-      }, { headers: { Authorization: `Bearer ${token}` } })
+      // ✅ Gọi đúng endpoint /visits/:id để cập nhật trạng thái
+      const response = await axiosOriginal.put(
+        `${BASE_URL}/visits/${selectedPatient._id}`,
+        {
+          status: "completed",
+          chanDoanChuyenMon: diagnose,
+          huongDieuTri: prescriptionText,
+          doctorName: doctorInfo.fullName,
+          doctorId: userId,
+        },
+        { headers: { Authorization: `Bearer ${token}` } }
+      )
 
       if (response.data.success) {
         alert("🎉 Đã lưu bệnh án thành công!")
         resetForm()
-        // Reload lại cả 2 danh sách từ DB
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
     } catch (error) {
@@ -173,7 +174,6 @@ export default function DoctorDashboard() {
     }
   }
 
-  // Danh sách hiển thị theo filter
   const displayList = activeFilter === "pending" ? patientList
     : activeFilter === "completed" ? completedList
     : [...patientList, ...completedList]
@@ -197,7 +197,7 @@ export default function DoctorDashboard() {
           </p>
         </div>
 
-        {/* 3 Ô thống kê — clickable */}
+        {/* 3 Ô thống kê */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
           {[
             { id: "all", icon: "👥", label: "Tổng ca hẹn trong ngày", value: loading ? "..." : patientList.length + completedList.length },
@@ -236,26 +236,25 @@ export default function DoctorDashboard() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: PRIMARY_LIGHT }}>
-                {["STT", "Họ tên", "Ngày sinh", "Giới tính", "SĐT", "Ngày hẹn", "Trạng thái", "Thao tác"].map(h => (
+                {["STT", "Họ tên bệnh nhân", "Chuyên khoa", "Ngày khám", "Triệu chứng", "Trạng thái", "Thao tác"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 13, color: PRIMARY, fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT }}>Đang tải...</td></tr>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT }}>Đang tải...</td></tr>
               ) : displayList.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT, fontStyle: "italic" }}>
+                <tr><td colSpan={7} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT, fontStyle: "italic" }}>
                   Không có bệnh nhân nào.
                 </td></tr>
               ) : displayList.map((p, i) => (
                 <tr key={p._id || i} style={{ background: i % 2 === 0 ? "#fff" : "#FAFBFC", borderBottom: `1px solid ${BORDER}` }}>
                   <td style={{ padding: "12px 14px", fontWeight: 700, color: PRIMARY_MED }}>#{i + 1}</td>
-                  <td style={{ padding: "12px 14px", fontWeight: 600, color: "#1E293B" }}>{p.fullName || "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#475569" }}>{p.dob ? new Date(p.dob).toLocaleDateString('vi-VN') : "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#475569" }}>{p.gender || "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#475569" }}>{p.phone || "---"}</td>
+                  <td style={{ padding: "12px 14px", fontWeight: 600, color: "#1E293B" }}>{p.patientName || "---"}</td>
+                  <td style={{ padding: "12px 14px", color: "#475569" }}>{p.specialty || "---"}</td>
                   <td style={{ padding: "12px 14px", color: "#0284C7", fontWeight: 600 }}>{p.appointmentDate || "---"}</td>
+                  <td style={{ padding: "12px 14px", color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.trieuChungLamSang || "---"}</td>
                   <td style={{ padding: "12px 14px" }}>
                     <span style={{
                       fontSize: 12, padding: "3px 10px", borderRadius: 20, fontWeight: 600,
@@ -285,8 +284,18 @@ export default function DoctorDashboard() {
         {selectedPatient && (
           <div style={{ marginTop: 32, background: "#fff", borderRadius: 14, padding: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: `1px solid ${PRIMARY_MED}` }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, borderBottom: `2px solid ${PRIMARY_LIGHT}`, paddingBottom: 12 }}>
-              <h3 style={{ color: PRIMARY, margin: 0 }}>🩺 Khám cho: <span style={{ color: "#EF4444" }}>{selectedPatient.fullName}</span></h3>
+              <h3 style={{ color: PRIMARY, margin: 0 }}>🩺 Khám cho: <span style={{ color: "#EF4444" }}>{selectedPatient.patientName}</span></h3>
               <button onClick={resetForm} style={{ background: "#EF4444", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Hủy ❌</button>
+            </div>
+
+            {/* Thông tin bệnh nhân */}
+            <div style={{ background: PRIMARY_LIGHT, borderRadius: 10, padding: 16, marginBottom: 20 }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 13 }}>
+                <div><strong>Chuyên khoa:</strong> {selectedPatient.specialty}</div>
+                <div><strong>Ngày hẹn:</strong> {selectedPatient.appointmentDate}</div>
+                <div><strong>Trạng thái:</strong> {selectedPatient.status}</div>
+                <div style={{ gridColumn: "1 / span 3" }}><strong>Triệu chứng:</strong> {selectedPatient.trieuChungLamSang || "---"}</div>
+              </div>
             </div>
 
             {/* Chẩn đoán */}

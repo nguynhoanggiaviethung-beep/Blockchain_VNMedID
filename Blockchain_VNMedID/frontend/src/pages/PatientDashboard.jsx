@@ -84,8 +84,8 @@ export default function PatientDashboard() {
 
     const loadHistory = async () => {
       try {
-        // ✅ Đọc từ visits collection qua appointments endpoint
-        const res = await fetch(`${BASE_URL}/appointments/my/history?patientId=${userId}`, { headers })
+        // ✅ Đúng endpoint
+        const res = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers })
         const data = await res.json()
         if (data.success) {
           setHistoryList(data.data)
@@ -164,16 +164,17 @@ export default function PatientDashboard() {
 
     setSaving(true); setError("")
     try {
-      const formattedDate = formAppointment.date.format("DD-MM-YYYY");
+      const formattedDate = formAppointment.date.format("YYYY-MM-DD") // ✅ format chuẩn
       const payloadData = {
         patientId: userId,
-        patient: userId,
+        patientName: localStorage.getItem("fullName"), // ✅ gửi patientName để admin thấy
         specialty: formAppointment.specialty,
         appointmentDate: formattedDate,
         trieuChungLamSang: formAppointment.reason,
-      };
+      }
 
-      const resRecord = await fetch(`${BASE_URL}/appointments`, {
+      // ✅ Đúng endpoint /visits
+      const resRecord = await fetch(`${BASE_URL}/visits`, {
         method: "POST",
         headers,
         body: JSON.stringify(payloadData)
@@ -181,8 +182,8 @@ export default function PatientDashboard() {
       const dataRecord = await resRecord.json()
 
       if (dataRecord.success) {
-        // ✅ Reload lịch sử từ đúng endpoint
-        const resHistory = await fetch(`${BASE_URL}/appointments/my/history?patientId=${userId}`, { headers })
+        // ✅ Reload lịch sử đúng endpoint
+        const resHistory = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers })
         const dataHistory = await resHistory.json()
         if (dataHistory.success) setHistoryList(dataHistory.data)
 
@@ -234,7 +235,6 @@ export default function PatientDashboard() {
     { key: "health", label: "🏥 Sức khỏe" },
   ]
 
-  // Số lượt đã khám xong
   const completedList = historyList.filter(r => r.status === "completed")
   const pendingList = historyList.filter(r => r.status === "pending")
 
@@ -271,12 +271,9 @@ export default function PatientDashboard() {
                 key={card.id}
                 onClick={() => handleStatCardClick(card.id)}
                 style={{
-                  background: WHITE,
-                  borderRadius: 14,
-                  padding: "24px",
+                  background: WHITE, borderRadius: 14, padding: "24px",
                   boxShadow: isSelected ? `0 0 0 2px ${PRIMARY_MED}, 0 4px 20px rgba(26,79,168,0.15)` : "0 2px 12px rgba(0,0,0,0.07)",
-                  cursor: "pointer",
-                  transition: "all 0.2s ease",
+                  cursor: "pointer", transition: "all 0.2s ease",
                   transform: isSelected ? "scale(1.02)" : "scale(1)"
                 }}
                 onMouseEnter={(e) => { if (!isSelected) e.currentTarget.style.boxShadow = "0 6px 16px rgba(0,0,0,0.12)" }}
@@ -381,7 +378,6 @@ export default function PatientDashboard() {
                               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 8 }}>
                                 <span style={{ fontWeight: 700, color: PRIMARY }}>Ca khám #{filteredArr.length - index}</span>
                                 <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-                                  {/* Badge trạng thái */}
                                   <span style={{
                                     fontSize: 12, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
                                     background: record.status === "completed" ? "#D1FAE5" : "#FEF3C7",

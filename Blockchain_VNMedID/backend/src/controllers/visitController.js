@@ -28,13 +28,15 @@ exports.bookAppointment = async (req, res) => {
 // ─── BỆNH NHÂN XEM LỊCH CỦA MÌNH ───────────────────────────────────────────
 exports.getMyAppointments = async (req, res) => {
   try {
-    const { patientId } = req.query;
+    // ✅ Ưu tiên lấy từ token (an toàn), fallback sang query nếu cần
+    const patientId = req.user?.userId || req.query.patientId;
 
     if (!patientId) {
       return res.status(400).json({ success: false, message: 'Thiếu patientId!' });
     }
 
-    const visits = await Visit.find({ patientId })
+    // ✅ Tìm theo cả 2 trường hợp: patientId là string hoặc ObjectId
+    const visits = await Visit.find({ patientId: patientId })
       .populate('doctorId', 'fullName specialty')
       .populate('shiftId', 'shift room date')
       .sort({ createdAt: -1 });
@@ -52,7 +54,6 @@ exports.getAllVisits = async (req, res) => {
     let filter = {};
 
     if (status) filter.status = status;
-
     if (date) filter.appointmentDate = date;
 
     if (search) {
