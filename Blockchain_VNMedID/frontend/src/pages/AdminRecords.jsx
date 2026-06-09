@@ -104,7 +104,7 @@ export default function AdminRecords() {
         params
       })
       .then((res) => {
-        setRecords(res.data?.data?.visits || res.data?.data || []);
+         setRecords(res.data?.data?.records || res.data?.data || []);
       })
       .catch((err) => {
         console.error(err);

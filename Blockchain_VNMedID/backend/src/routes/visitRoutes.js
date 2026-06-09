@@ -1,3 +1,4 @@
+// routes/visits.js
 const express = require('express');
 const router = express.Router();
 
@@ -12,7 +13,15 @@ router.post(
   visitController.bookAppointment
 );
 
-// Doctor + Admin xem tất cả lượt khám
+// ✅ THÊM: Bệnh nhân xem lịch của mình
+router.get(
+  '/my',
+  xacThucToken,
+  phanQuyen('patient'),
+  visitController.getMyAppointments
+);
+
+// Admin/Doctor xem tất cả lượt khám
 router.get(
   '/',
   xacThucToken,
@@ -20,7 +29,7 @@ router.get(
   visitController.getAllVisits
 );
 
-// Doctor + Admin cập nhật lượt khám
+// Admin/Doctor cập nhật lượt khám
 router.put(
   '/:id',
   xacThucToken,
@@ -28,7 +37,7 @@ router.put(
   visitController.updateVisit
 );
 
-// Doctor + Admin xóa lượt khám
+// Admin/Doctor xóa lượt khám
 router.delete(
   '/:id',
   xacThucToken,

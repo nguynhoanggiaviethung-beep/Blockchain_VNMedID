@@ -1,5 +1,4 @@
 const Visit = require('../models/Visit');
-const mongoose = require('mongoose');
 
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
 exports.bookAppointment = async (req, res) => {
@@ -30,7 +29,16 @@ exports.bookAppointment = async (req, res) => {
 exports.getMyAppointments = async (req, res) => {
   try {
     const { patientId } = req.query;
-    const visits = await Visit.find({ patientId }).sort({ createdAt: -1 });
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'Thiếu patientId!' });
+    }
+
+    const visits = await Visit.find({ patientId })
+      .populate('doctorId', 'fullName specialty')
+      .populate('shiftId', 'shift room date')
+      .sort({ createdAt: -1 });
+
     return res.json({ success: true, data: visits });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
@@ -45,14 +53,14 @@ exports.getAllVisits = async (req, res) => {
 
     if (status) filter.status = status;
 
-    if (date) filter.appointmentDate = date; // "YYYY-MM-DD"
+    if (date) filter.appointmentDate = date;
 
     if (search) {
       filter.$or = [
-        { patientName:  { $regex: search, $options: 'i' } },
-        { doctorName:   { $regex: search, $options: 'i' } },
-        { specialty:    { $regex: search, $options: 'i' } },
-        { patientId:    { $regex: search, $options: 'i' } },
+        { patientName: { $regex: search, $options: 'i' } },
+        { doctorName:  { $regex: search, $options: 'i' } },
+        { specialty:   { $regex: search, $options: 'i' } },
+        { patientId:   { $regex: search, $options: 'i' } },
       ];
     }
 
@@ -70,7 +78,7 @@ exports.getAllVisits = async (req, res) => {
   }
 };
 
-// ─── ADMIN: CẬP NHẬT LƯỢT KHÁM (phân công BS, đổi trạng thái, ghi chẩn đoán) 
+// ─── ADMIN: CẬP NHẬT LƯỢT KHÁM ──────────────────────────────────────────────
 exports.updateVisit = async (req, res) => {
   try {
     const { id } = req.params;
@@ -83,20 +91,22 @@ exports.updateVisit = async (req, res) => {
     const updated = await Visit.findByIdAndUpdate(
       id,
       {
-        ...(status           !== undefined && { status }),
-        ...(doctorId         !== undefined && { doctorId }),
-        ...(doctorName       !== undefined && { doctorName }),
-        ...(shiftId          !== undefined && { shiftId }),
-        ...(diagnosis        !== undefined && { diagnosis }),
-        ...(chanDoanChuyenMon!== undefined && { chanDoanChuyenMon }),
-        ...(huongDieuTri     !== undefined && { huongDieuTri }),
-        ...(prescription     !== undefined && { prescription }),
-        ...(note             !== undefined && { note: note }),
+        ...(status            !== undefined && { status }),
+        ...(doctorId          !== undefined && { doctorId }),
+        ...(doctorName        !== undefined && { doctorName }),
+        ...(shiftId           !== undefined && { shiftId }),
+        ...(diagnosis         !== undefined && { diagnosis }),
+        ...(chanDoanChuyenMon !== undefined && { chanDoanChuyenMon }),
+        ...(huongDieuTri      !== undefined && { huongDieuTri }),
+        ...(prescription      !== undefined && { prescription }),
+        ...(note              !== undefined && { note }),
       },
       { new: true }
     );
 
-    if (!updated) return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+    if (!updated) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+    }
 
     return res.json({ success: true, data: updated });
   } catch (error) {
@@ -108,7 +118,11 @@ exports.updateVisit = async (req, res) => {
 exports.deleteVisit = async (req, res) => {
   try {
     const deleted = await Visit.findByIdAndDelete(req.params.id);
-    if (!deleted) return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+
+    if (!deleted) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+    }
+
     return res.json({ success: true, message: 'Đã xóa lượt khám!' });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
