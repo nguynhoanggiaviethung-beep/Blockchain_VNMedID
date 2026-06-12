@@ -1,6 +1,12 @@
+require('dotenv').config();
+
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+// Force-load web3 config so startup always prints the Sepolia connection log
+require('./src/config/web3');
+
+
 
 const JWT_SECRET = 'vnmedid_super_secret_key_2024';
 const MONGO_URI = 'mongodb://localhost:27017/vnmedid';
@@ -58,14 +64,14 @@ app.use('/api/v1/payments',        require('./src/routes/paymentRoutes'));
 
 app.get("/", (req, res) => res.send("Backend VNmedID đang chạy!"));
 
-// 5. KHỞI ĐỘNG SERVER
-app.listen(PORT, () => console.log(`🚀 Server đang chạy tại cổng ${PORT}`));
-
-// 6. KẾT NỐI MONGODB
+// 5. KHỞI ĐỘNG SERVER (chỉ sau khi MongoDB kết nối xong để log đúng thứ tự)
 mongoose.connect(MONGO_URI, {
     directConnection: true,
     serverSelectionTimeoutMS: 30000,
     socketTimeoutMS: 45000
 })
-.then(() => console.log('✅ Kết nối MongoDB thành công!'))
-.catch((err) => console.log('❌ Lỗi kết nối MongoDB:', err.message));
+  .then(() => {
+    console.log('✅ Kết nối MongoDB thành công!');
+    app.listen(PORT, () => console.log(`🚀 Server đang chạy tại cổng ${PORT}`));
+  })
+  .catch((err) => console.log('❌ Lỗi kết nối MongoDB:', err.message));

@@ -14,31 +14,20 @@ app.use(cors({
 app.use(express.json());
 
 // Routes
-app.use('/api/v1/patients',        require('./API Format/src/routes/patientRoutes'));
-app.use('/api/v1/doctors',         require('./API Format/src/routes/doctorRoutes'));
-app.use('/api/v1/visits',          require('./API Format/src/routes/visitRoutes'));
-app.use('/api/v1/medical-records', require('./API Format/src/routes/medicalRecordRoutes'));
-app.use('/api/v1/invoices',        require('./API Format/src/routes/invoiceRoutes'));
-app.use('/api/v1/access',          require('./API Format/src/routes/accessRoutes'));
-app.use('/api/v1/payments',        require('./API Format/src/routes/paymentRoutes'));
-app.use('/api/v1/auth',            require('./API Format/src/routes/authRoutes'));
+app.use('/api/v1/patients',        require('./src/routes/patientRoutes'));
+app.use('/api/v1/doctors',         require('./src/routes/doctorRoutes'));
+app.use('/api/v1/visits',          require('./src/routes/visitRoutes'));
+app.use('/api/v1/medical-records', require('./src/routes/medicalRecordRoutes'));
+app.use('/api/v1/invoices',        require('./src/routes/invoiceRoutes'));
+app.use('/api/v1/access',          require('./src/routes/accessRoutes'));
+app.use('/api/v1/payments',        require('./src/routes/paymentRoutes'));
+app.use('/api/v1/auth',            require('./src/routes/authRoutes'));
 // ── Thêm vào file routes của bạn (vd: routes/index.js hoặc app.js) ──────────
 
-const visitController = require('./controllers/visitController');
-const shiftController = require('./controllers/shiftController');
+// (Đoạn router tĩnh phía dưới trong file này bị lỗi do dùng biến `router` chưa được khai báo.
+// Server đã map route thông qua các file src/routes/* ở phía trên, nên bỏ qua phần này để boot server.
+// (Không đụng blockchain)
 
-// Visit / Lượt khám
-router.post  ('/visits',          visitController.bookAppointment);   // BN đặt lịch
-router.get   ('/visits/my',       visitController.getMyAppointments); // BN xem lịch của mình
-router.get   ('/visits',          visitController.getAllVisits);       // Admin xem tất cả
-router.put   ('/visits/:id',      visitController.updateVisit);       // Admin cập nhật
-router.delete('/visits/:id',      visitController.deleteVisit);       // Admin xóa
-
-// Shift / Ca trực bác sĩ
-router.post  ('/shifts',          shiftController.createShift);
-router.get   ('/shifts',          shiftController.getAllShifts);
-router.put   ('/shifts/:id',      shiftController.updateShift);
-router.delete('/shifts/:id',      shiftController.deleteShift);
 // Kết nối MongoDB
 mongoose.connect('mongodb://localhost:27017/vnmedid')
   .then(() => {

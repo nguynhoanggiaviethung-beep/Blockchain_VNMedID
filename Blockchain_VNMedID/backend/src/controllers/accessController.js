@@ -1,3 +1,5 @@
+const { ethers } = require('ethers');
+
 // POST /access/grant — Cấp quyền bác sĩ xem hồ sơ (Admin)
 exports.grantAccess = async (req, res) => {
   try {

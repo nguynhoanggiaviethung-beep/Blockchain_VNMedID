@@ -1,0 +1,121 @@
+{
+  "contractName": "UserRegistry",
+  "abi": [
+    {
+      "inputs": [],
+      "stateMutability": "nonpayable",
+      "type": "constructor"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        { "indexed": false, "internalType": "address", "name": "wallet", "type": "address" },
+        { "indexed": false, "internalType": "string", "name": "userId", "type": "string" },
+        { "indexed": false, "internalType": "uint8", "name": "role", "type": "uint8" }
+      ],
+      "name": "UserRegistered",
+      "type": "event"
+    },
+    {
+      "anonymous": false,
+      "inputs": [
+        { "indexed": false, "internalType": "address", "name": "wallet", "type": "address" },
+        { "indexed": false, "internalType": "bool", "name": "active", "type": "bool" }
+      ],
+      "name": "UserStatusChanged",
+      "type": "event"
+    },
+    {
+      "inputs": [
+        { "internalType": "address", "name": "wallet", "type": "address" },
+        { "internalType": "string", "name": "userId", "type": "string" },
+        { "internalType": "uint8", "name": "role", "type": "uint8" }
+      ],
+      "name": "registerUser",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "address", "name": "wallet", "type": "address" },
+        { "internalType": "bool", "name": "active", "type": "bool" }
+      ],
+      "name": "setUserStatus",
+      "outputs": [],
+      "stateMutability": "nonpayable",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "address", "name": "wallet", "type": "address" }
+      ],
+      "name": "getUser",
+      "outputs": [
+        { "internalType": "string", "name": "userId", "type": "string" },
+        { "internalType": "uint8", "name": "role", "type": "uint8" },
+        { "internalType": "bool", "name": "active", "type": "bool" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [
+        { "internalType": "address", "name": "wallet", "type": "address" },
+        { "internalType": "uint8", "name": "role", "type": "uint8" }
+      ],
+      "name": "isAuthorizedRole",
+      "outputs": [
+        { "internalType": "bool", "name": "", "type": "bool" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "admin",
+      "outputs": [
+        { "internalType": "address", "name": "", "type": "address" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ROLE_ADMIN",
+      "outputs": [
+        { "internalType": "uint8", "name": "", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ROLE_DOCTOR",
+      "outputs": [
+        { "internalType": "uint8", "name": "", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ROLE_NONE",
+      "outputs": [
+        { "internalType": "uint8", "name": "", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    },
+    {
+      "inputs": [],
+      "name": "ROLE_PATIENT",
+      "outputs": [
+        { "internalType": "uint8", "name": "", "type": "uint8" }
+      ],
+      "stateMutability": "view",
+      "type": "function"
+    }
+  ]
+}
+
