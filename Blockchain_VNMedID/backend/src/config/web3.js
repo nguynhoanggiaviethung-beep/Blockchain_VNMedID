@@ -1,13 +1,12 @@
 const { ethers } = require("ethers");
 require("dotenv").config();
-console.log("ENV FILE TEST:");
-console.log(process.env);
+const logger = require('../utils/logger');
 
 const UserRegistryABI = require("../abis/UserRegistry.json");
-// const AccessControlABI = require("../abis/AccessControl.json");
-// const MedicalRecordABI = require("../abis/MedicalRecord.json");
-// const PaymentABI = require("../abis/Payment.json");
 
+const AccessControlABI = require("../abis/AccessControl.json");
+const MedicalRecordABI = require("../abis/MedicalRecord.json");
+const PaymentABI = require("../abis/Payment.json");
 const provider = new ethers.JsonRpcProvider(
   process.env.SEPOLIA_RPC_URL
 );
@@ -18,9 +17,9 @@ const adminWallet = new ethers.Wallet(
   provider
 );
 
-console.log(
-  "🌐 Đang thiết lập kết nối Blockchain Sepolia... ✅"
-);
+logger.blockchain('Thiết lập kết nối Blockchain Sepolia...');
+logger.blockchain(`✅ RPC: ${process.env.SEPOLIA_RPC_URL?.split('/v2/')[0] + '/v2/***'}`);
+
 
 const contractAddresses = {
   userRegistry: process.env.USER_REGISTRY_ADDRESS,
@@ -31,9 +30,10 @@ const contractAddresses = {
 
 const contractABIs = {
   userRegistry: UserRegistryABI.abi,
-  // accessControl: AccessControlABI.abi,
-  // medicalRecord: MedicalRecordABI.abi,
-  // payment: PaymentABI.abi,
+  accessControl: AccessControlABI.abi,
+  medicalRecord: MedicalRecordABI.abi,
+  payment: PaymentABI.abi,
+
 };
 
 const getContractInstance = (contractName) => {

@@ -3,13 +3,10 @@ require('dotenv').config();
 const express = require("express");
 const cors = require("cors");
 const mongoose = require("mongoose");
+const connectDatabase = require('./src/config/mongodb');
 // Force-load web3 config so startup always prints the Sepolia connection log
 require('./src/config/web3');
-
 const JWT_SECRET = 'vnmedid_super_secret_key_2024';
-const MONGO_URI = process.env.MONGO_URI;
-
-console.log(MONGO_URI)
 
 const PORT = 5000;
 
@@ -23,8 +20,8 @@ app.use(express.json());
 
 // 2. MIDDLEWARE DEBUG LOG
 app.use((req, res, next) => {
-    console.log(`📨 ${req.method} ${req.url}`);
-    next();
+  console.log(`📨 ${req.method} ${req.url}`);
+  next();
 });
 
 // 3. ENDPOINT TRA CỨU OPENFDA REAL-TIME
@@ -53,22 +50,23 @@ app.get('/api/v1/drugs/search', async (req, res) => {
 });
 
 require('./src/models/Shift');
-app.use('/api/v1/auth',            require('./src/routes/authRoutes'));
-app.use('/api/v1/patients',        require('./src/routes/patientRoutes'));
-app.use('/api/v1/doctors',         require('./src/routes/doctorRoutes'));
-app.use('/api/v1/visits',          require('./src/routes/visitRoutes'));       // ✅ gộp cả đặt lịch + quản lý
+app.use('/api/v1/auth', require('./src/routes/authRoutes'));
+app.use('/api/v1/patients', require('./src/routes/patientRoutes'));
+app.use('/api/v1/doctors', require('./src/routes/doctorRoutes'));
+app.use('/api/v1/visits', require('./src/routes/visitRoutes'));       // ✅ gộp cả đặt lịch + quản lý
 app.use('/api/v1/medical-records', require('./src/routes/medicalRecordRoutes'));
-app.use('/api/v1/invoices',        require('./src/routes/invoiceRoutes'));
-app.use('/api/v1/access',          require('./src/routes/accessRoutes'));
-app.use('/api/v1/payments',        require('./src/routes/paymentRoutes'));
+app.use('/api/v1/invoices', require('./src/routes/invoiceRoutes'));
+app.use('/api/v1/access', require('./src/routes/accessRoutes'));
+app.use('/api/v1/payments', require('./src/routes/paymentRoutes'));
 
 
 app.get("/", (req, res) => res.send("Backend VNmedID đang chạy!"));
 
 // 5. KHỞI ĐỘNG SERVER (chỉ sau khi MongoDB kết nối xong để log đúng thứ tự)
-mongoose.connect(MONGO_URI)
+connectDatabase()
   .then(() => {
-    console.log('✅ Kết nối MongoDB thành công!');
     app.listen(PORT, () => console.log(`🚀 Server đang chạy tại cổng ${PORT}`));
   })
   .catch((err) => console.log('❌ Lỗi kết nối MongoDB:', err.message));
+
+connectDatabase
