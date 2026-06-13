@@ -1,5 +1,7 @@
 const { ethers } = require("ethers");
 require("dotenv").config();
+console.log("ENV FILE TEST:");
+console.log(process.env);
 
 const UserRegistryABI = require("../abis/UserRegistry.json");
 // const AccessControlABI = require("../abis/AccessControl.json");
@@ -9,9 +11,10 @@ const UserRegistryABI = require("../abis/UserRegistry.json");
 const provider = new ethers.JsonRpcProvider(
   process.env.SEPOLIA_RPC_URL
 );
-
+console.log("PRIVATE KEY:", process.env.SEPOLIA_PRIVATE_KEY);
+console.log("LENGTH:", process.env.SEPOLIA_PRIVATE_KEY?.length);
 const adminWallet = new ethers.Wallet(
-  process.env.ADMIN_PRIVATE_KEY,
+  process.env.SEPOLIA_PRIVATE_KEY,
   provider
 );
 
@@ -20,10 +23,10 @@ console.log(
 );
 
 const contractAddresses = {
-  userRegistry: process.env.CONTRACT_USER,
-  accessControl: process.env.CONTRACT_ACCESS,
-  medicalRecord: process.env.CONTRACT_MEDICAL,
-  payment: process.env.CONTRACT_PAYMENT,
+  userRegistry: process.env.USER_REGISTRY_ADDRESS,
+  accessControl: process.env.ACCESS_CONTROL_ADDRESS,
+  medicalRecord: process.env.MEDICAL_RECORD_ADDRESS,
+  payment: process.env.PAYMENT_ADDRESS,
 };
 
 const contractABIs = {

@@ -7,7 +7,7 @@ const mongoose = require("mongoose");
 require('./src/config/web3');
 
 const JWT_SECRET = 'vnmedid_super_secret_key_2024';
-const MONGO_URI = process.env.MONGODB_URI;
+const MONGO_URI = process.env.MONGO_URI;
 
 console.log(MONGO_URI)
 
