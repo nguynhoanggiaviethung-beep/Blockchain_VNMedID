@@ -143,6 +143,32 @@ const Login = () => {
     else if (password.length < 6) e.password = "Mật khẩu tối thiểu 6 ký tự";
     return e;
   };
+const connectMetaMask = async () => {
+  if (!window.ethereum) {
+    alert("Vui lòng cài đặt MetaMask!");
+    return;
+  }
+
+  try {
+    const accounts = await window.ethereum.request({
+      method: "eth_requestAccounts",
+    });
+    const walletAddress = accounts[0];
+
+    const token = localStorage.getItem("token");
+    if (token) {
+      await api.put("/auth/wallet", { walletAddress }, {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      alert("Đã kết nối và lưu ví: " + walletAddress);
+    } else {
+      alert("Đã kết nối ví: " + walletAddress + " (cần đăng nhập để lưu)");
+    }
+  } catch (err) {
+    console.error("Lỗi kết nối MetaMask:", err);
+    alert("Kết nối ví thất bại!");
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -342,7 +368,7 @@ const Login = () => {
                 <div style={styles.dividerLine} />
               </div>
 
-              <button type="button" style={styles.metaMaskBtn}>
+              <button type="button" style={styles.metaMaskBtn} onClick={connectMetaMask}>
                 <svg width="20" height="20" viewBox="0 0 35 33" fill="none">
                   <path d="M32.958 1L19.41 10.692l2.519-5.937L32.958 1z" fill="#E2761B" />
                   <path d="M2.025 1l13.435 9.784-2.4-5.937L2.025 1z" fill="#E4761B" />
