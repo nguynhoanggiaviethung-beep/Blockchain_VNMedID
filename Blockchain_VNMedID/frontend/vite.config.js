@@ -6,6 +6,6 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: 'all'  // ← thêm dòng này
+    allowedHosts: 'victorious-commitment-production-f268.up.railway.app'  // ← thêm dòng này
   }
 })
