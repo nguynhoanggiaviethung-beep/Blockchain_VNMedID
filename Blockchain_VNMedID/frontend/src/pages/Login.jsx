@@ -7,7 +7,7 @@ import { mapBackendToFrontend } from '../utils/doctorMapper.js';
 
 // Cấu hình Axios kết nối trực tiếp đến Endpoint của Backend
 const api = axios.create({
-  baseURL: "http://localhost:5000/api/v1",
+  baseURL: "https://blockchainvnmedid-production.up.railway.app/api/v1",
 });
 
 // Bảng màu hệ thống định danh thương hiệu (Design Tokens)

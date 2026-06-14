@@ -11,7 +11,7 @@ const SUCCESS = "#16A34A"
 const SUCCESS_LIGHT = "#DCFCE7"
 const WARNING = "#D97706"
 const WARNING_LIGHT = "#FEF3C7"
-const BASE_URL = "http://localhost:5000/api/v1"
+const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
 const SHIFT_MAP = {
   morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,     bg: WARNING_LIGHT },

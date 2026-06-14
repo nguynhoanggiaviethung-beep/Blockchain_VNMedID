@@ -14,7 +14,7 @@ const WHITE = "#FFFFFF"
 const GRAY_TEXT = "#5F6B7A"
 const BORDER = "#CBD5E1"
 
-const BASE_URL = "http://localhost:5000/api/v1"
+const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
 export default function PatientDashboard() {
   const navigate = useNavigate()

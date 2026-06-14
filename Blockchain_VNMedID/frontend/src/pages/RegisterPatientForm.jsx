@@ -24,7 +24,7 @@ const RegisterPatientForm = () => {
     try {
       // Sửa code file này đúng không: Có, và cần bao gồm logic axios request
       // Code trong hình của bạn không có phần này, nên nó không thể gửi dữ liệu thật
-      const response = await axios.post(`http://localhost:5000/api/v1/auth/register-patient`, patientData);
+      const response = await axios.post(`https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient`, patientData);
       if (response.data.success) {
         setStatusMessage('Đăng ký tài khoản bệnh nhân thành công!');
       }
