@@ -15,6 +15,7 @@ const xacThucToken = (req, res, next) => {
         const decoded = jwt.verify(token, secretKey);
         
         req.user = decoded; // Lưu thông tin { userId, role } vào request
+        req.userId = decoded.userId;
         next();
     } catch (error) {
         return res.status(401).json({ success: false, message: 'Token hết hạn hoặc không hợp lệ!' });

@@ -43,4 +43,72 @@ router.post('/register-doctor', xacThucToken, phanQuyen('admin'), async (req, re
   }
 });
 
+// POST /api/v1/access/grant
+router.post('/grant', xacThucToken, phanQuyen('admin'), async (req, res) => {
+  try {
+    const { patientId, doctorWallet } = req.body;
+    if (!patientId || !doctorWallet) {
+      return res.status(400).json({ success: false, message: 'Thiếu patientId hoặc doctorWallet!' });
+    }
+    const contract = getAccessContract();
+    const tx = await contract.grantAccess(patientId, doctorWallet);
+    await tx.wait();
+    return res.json({ success: true, message: 'Cấp quyền thành công!', data: { txHash: tx.hash } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi blockchain: ' + err.message });
+  }
+});
+
+// POST /api/v1/access/revoke
+router.post('/revoke', xacThucToken, phanQuyen('admin'), async (req, res) => {
+  try {
+    const { patientId, doctorWallet } = req.body;
+    if (!patientId || !doctorWallet) {
+      return res.status(400).json({ success: false, message: 'Thiếu patientId hoặc doctorWallet!' });
+    }
+    const contract = getAccessContract();
+    const tx = await contract.revokeAccess(patientId, doctorWallet);
+    await tx.wait();
+    return res.json({ success: true, message: 'Thu hồi quyền thành công!', data: { txHash: tx.hash } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi blockchain: ' + err.message });
+  }
+});
+
+// GET /api/v1/access/check
+router.get('/check', xacThucToken, async (req, res) => {
+  try {
+    const { patientId, doctorWallet } = req.query;
+    if (!patientId || !doctorWallet) {
+      return res.status(400).json({ success: false, message: 'Thiếu patientId hoặc doctorWallet!' });
+    }
+    const contract = getAccessContract();
+    const hasAccess = await contract.checkAccess(patientId, doctorWallet);
+    return res.json({ success: true, data: { hasAccess, patientId, doctorWallet } });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi blockchain: ' + err.message });
+  }
+});
+
+// GET /api/v1/access/logs
+router.get('/logs', xacThucToken, phanQuyen('admin'), async (req, res) => {
+  try {
+    const contract = getAccessContract();
+    const count = await contract.getLogCount();
+    const logs = [];
+    for (let i = 0; i < count; i++) {
+      const log = await contract.getLog(i);
+      logs.push({
+        patientId: log.patientId,
+        doctorWallet: log.doctorWallet,
+        allowed: log.allowed,
+        time: new Date(Number(log.time) * 1000).toLocaleString('vi-VN')
+      });
+    }
+    return res.json({ success: true, data: logs });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi blockchain: ' + err.message });
+  }
+});
+
 module.exports = router;
