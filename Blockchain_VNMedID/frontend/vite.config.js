@@ -6,7 +6,10 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: 'all',  // ← Sửa thành chuỗi trực tiếp, BỎ dấu ngoặc vuông [] đi bạn nhé
     strictPort: true,
+    // Cấu hình cho Vite bản mới (Vite 6+)
+    allowedHosts: 'all',
+    // Cấu hình bẻ khóa bảo mật cho Vite bản cũ (Vite 5 trở xuống)
+    disableHostCheck: true 
   }
 })
