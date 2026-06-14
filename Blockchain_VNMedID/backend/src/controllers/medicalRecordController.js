@@ -1,6 +1,8 @@
 const MedicalRecord = require('../models/MedicalRecord'); 
 const Visit = require('../models/Visit');
 const mongoose = require('mongoose');
+const { ethers } = require('ethers');
+const { getContractInstance } = require('../config/web3');
 
 const createRecord = async (req, res) => {
     try {
@@ -181,9 +183,10 @@ const completeVisit = async (req, res) => {
         }
 
         // ✅ FIX: _id là string → dùng findOneAndUpdate thay vì findByIdAndUpdate
-        const db = mongoose.connection.db;
-        await db.collection('visits').updateOne(
-            { _id: recordId },
+       const db = mongoose.connection.db;
+       const visitObjectId = new mongoose.Types.ObjectId(recordId);
+       await db.collection('visits').updateOne(
+           { _id: visitObjectId },
             { $set: {
                 chanDoanChuyenMon: diagnose,
                 huongDieuTri: prescription,
@@ -192,13 +195,31 @@ const completeVisit = async (req, res) => {
                 updatedAt: new Date()
             }}
         );
-        const visit = await db.collection('visits').findOne({ _id: recordId });
+        const visit = await db.collection('visits').findOne({ _id: visitObjectId });
 
         if (!visit) {
             return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
         }
 
-        return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit });
+        // Đồng bộ hash bệnh án lên blockchain
+        let recordTxHash = null;
+        try {
+            const recordContent = JSON.stringify({ recordId, diagnose, prescription, doctorName });
+            const recordHash = ethers.keccak256(ethers.toUtf8Bytes(recordContent));
+
+            const medicalContract = getContractInstance('medicalRecord');
+            const tx = await medicalContract.addRecordHash(
+                String(visit.patientId),
+                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586",
+                recordHash
+            );
+            await tx.wait();
+            recordTxHash = tx.hash;
+        } catch (bcError) {
+            console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
+        }
+
+        return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit, recordTxHash });
     } catch (error) {
         return res.status(500).json({ success: false, message: "Lỗi hệ thống", error: error.message });
     }
