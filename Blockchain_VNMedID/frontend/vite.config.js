@@ -6,7 +6,7 @@ export default defineConfig({
   server: {
     host: true,
     port: 5173,
-    allowedHosts: ['all'],  // ← dùng array
+    allowedHosts: 'all',  // ← Sửa thành chuỗi trực tiếp, BỎ dấu ngoặc vuông [] đi bạn nhé
     strictPort: true,
-    }
+  }
 })
