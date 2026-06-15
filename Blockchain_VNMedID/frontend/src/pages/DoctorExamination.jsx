@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 
-const BASE_URL = "https://victorious-commitment-production-250c.up.railway.app/api/v1";
+const BASE_URL = "https://victorious-commitment-production-ba03.up.railway.app/api/v1";
 
 const SUGGESTED_DRUGS = [
   "Paracetamol 500mg (Giảm đau, hạ sốt)",
