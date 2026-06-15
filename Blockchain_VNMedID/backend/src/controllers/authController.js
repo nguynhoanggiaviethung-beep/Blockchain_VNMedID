@@ -63,7 +63,13 @@ const login = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Đăng nhập thành công!",
-      data: { token, role, fullName: user.fullName || "Người dùng VNmedID", userId: user._id },
+      data: {
+        token, role,
+        fullName: user.fullName || "Người dùng VNmedID",
+        userId: user._id,
+        // ✅ Trả về walletAddress để frontend biết đã kết nối ví chưa
+        walletAddress: user.walletAddress || null,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
@@ -113,7 +119,7 @@ const registerPatient = async (req, res) => {
   }
 };
 
-// ✅ Đăng nhập bằng ví MetaMask — tìm không phân biệt hoa thường
+// ✅ Đăng nhập bằng ví MetaMask
 const loginWithWallet = async (req, res) => {
   try {
     const { walletAddress } = req.body;
@@ -123,13 +129,12 @@ const loginWithWallet = async (req, res) => {
 
     const db = mongoose.connection.db;
 
-    // Tìm không phân biệt hoa thường (case-insensitive)
     const user = await db.collection("users").findOne({
       walletAddress: { $regex: new RegExp(`^${walletAddress}$`, 'i') }
     });
 
     if (!user) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản liên kết với ví này!" });
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản liên kết với ví này! Vui lòng đăng nhập bằng email trước." });
     }
 
     const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";
@@ -138,14 +143,19 @@ const loginWithWallet = async (req, res) => {
     return res.status(200).json({
       success: true,
       message: "Đăng nhập bằng ví thành công!",
-      data: { token, role: user.role, fullName: user.fullName || "Người dùng VNmedID", userId: user._id },
+      data: {
+        token, role: user.role,
+        fullName: user.fullName || "Người dùng VNmedID",
+        userId: user._id,
+        walletAddress: user.walletAddress,
+      },
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
   }
 };
 
-// ✅ Lưu ví MetaMask — giữ nguyên format không lowercase
+// ✅ Lưu ví MetaMask — sửa req.user.id → req.user.userId
 const saveWallet = async (req, res) => {
   try {
     const { walletAddress } = req.body;
@@ -154,7 +164,9 @@ const saveWallet = async (req, res) => {
     }
 
     const db = mongoose.connection.db;
-    const userId = new mongoose.Types.ObjectId(req.user.id);
+
+    // ✅ FIX: dùng req.user.userId (khớp với authMiddleware)
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
 
     await db.collection("users").updateOne(
       { _id: userId },

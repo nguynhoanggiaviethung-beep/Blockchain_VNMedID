@@ -152,6 +152,50 @@ function AnimatedBg() {
   );
 }
 
+// ── FLOATING MEDICAL ICONS ──
+const FLOAT_ICONS = [
+  { emoji: "🏥", size: 28, x: "8%",  y: "12%", dur: "7s",  delay: "0s"   },
+  { emoji: "💊", size: 22, x: "18%", y: "72%", dur: "9s",  delay: "1.2s" },
+  { emoji: "🩺", size: 26, x: "78%", y: "18%", dur: "8s",  delay: "0.5s" },
+  { emoji: "🧬", size: 24, x: "88%", y: "65%", dur: "10s", delay: "2s"   },
+  { emoji: "❤️", size: 20, x: "5%",  y: "50%", dur: "6s",  delay: "1.8s" },
+  { emoji: "🔬", size: 22, x: "70%", y: "82%", dur: "11s", delay: "0.8s" },
+  { emoji: "💉", size: 20, x: "55%", y: "8%",  dur: "8.5s",delay: "3s"   },
+  { emoji: "🩻", size: 24, x: "92%", y: "38%", dur: "7.5s",delay: "1.5s" },
+  { emoji: "🧪", size: 20, x: "32%", y: "88%", dur: "9.5s",delay: "2.5s" },
+  { emoji: "⚕️", size: 26, x: "42%", y: "5%",  dur: "6.5s",delay: "0.3s" },
+  { emoji: "🫀", size: 22, x: "15%", y: "35%", dur: "10s", delay: "4s"   },
+  { emoji: "🧠", size: 20, x: "65%", y: "55%", dur: "8s",  delay: "2.8s" },
+];
+
+function FloatingIcons() {
+  return (
+    <div style={{ position: "absolute", inset: 0, zIndex: 0, pointerEvents: "none", overflow: "hidden" }}>
+      <style>{`
+        @keyframes floatUp {
+          0%   { transform: translateY(0px)   rotate(0deg);   opacity: 0.13; }
+          25%  { transform: translateY(-18px) rotate(6deg);   opacity: 0.22; }
+          50%  { transform: translateY(-8px)  rotate(-4deg);  opacity: 0.18; }
+          75%  { transform: translateY(-22px) rotate(8deg);   opacity: 0.25; }
+          100% { transform: translateY(0px)   rotate(0deg);   opacity: 0.13; }
+        }
+      `}</style>
+      {FLOAT_ICONS.map((ic, i) => (
+        <div key={i} style={{
+          position: "absolute",
+          left: ic.x, top: ic.y,
+          fontSize: ic.size,
+          animation: `floatUp ${ic.dur} ${ic.delay} ease-in-out infinite`,
+          userSelect: "none",
+          filter: "blur(0.4px)",
+        }}>
+          {ic.emoji}
+        </div>
+      ))}
+    </div>
+  );
+}
+
 // ── CLICK STAR BURST EFFECT ──
 function useClickStars() {
   useEffect(() => {
@@ -228,54 +272,21 @@ const Login = () => {
   };
 
   const connectMetaMask = async () => {
-  if (!window.ethereum) {
-    setErrors({ general: "Vui lòng cài đặt MetaMask!" });
-    return;
-  }
-  try {
-    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-    const walletAddress = accounts[0];
-
-    // Nếu đã đăng nhập → chỉ lưu ví vào DB
-    const token = localStorage.getItem("token");
-    if (token) {
-      await api.put("/auth/wallet", { walletAddress }, { headers: { Authorization: `Bearer ${token}` } });
-      alert("✅ Đã liên kết ví thành công: " + walletAddress);
-      return;
+    if (!window.ethereum) { alert("Vui lòng cài đặt MetaMask!"); return; }
+    try {
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      const walletAddress = accounts[0];
+      const token = localStorage.getItem("token");
+      if (token) {
+        await api.put("/auth/wallet", { walletAddress }, { headers: { Authorization: `Bearer ${token}` } });
+        alert("Đã kết nối và lưu ví: " + walletAddress);
+      } else {
+        alert("Đã kết nối ví: " + walletAddress + " (cần đăng nhập để lưu)");
+      }
+    } catch (err) {
+      alert("Kết nối ví thất bại!");
     }
-
-    // Chưa đăng nhập → login bằng ví
-    setLoading(true);
-    const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
-    const response = await api.post("/auth/login-wallet", {
-      walletAddress,
-      role: roleMap[role]
-    });
-
-    const loginData = response.data?.data;
-    if (!loginData?.token) throw new Error("Không nhận được token!");
-
-    localStorage.setItem("token", loginData.token);
-    localStorage.setItem("userRole", loginData.role);
-    localStorage.setItem("userId", String(loginData.userId));
-    localStorage.setItem("fullName", loginData.fullName || "Người dùng VNmedID");
-
-    if (loginData.role === "doctor") {
-      localStorage.setItem("chuyenKhoa", loginData.specialty || "");
-      localStorage.setItem("maBacSi", loginData.licenseNumber || "");
-    }
-
-    const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
-    setSuccess(true);
-    navigate("/setup-wallet");
-
-  } catch (err) {
-    const msg = err.response?.data?.message || err.message || "Kết nối ví thất bại!";
-    setErrors({ general: msg });
-  } finally {
-    setLoading(false);
-  }
-};
+  };
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -311,7 +322,14 @@ const Login = () => {
       }
       const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
       setSuccess(true);
-      navigate("/setup-wallet");
+
+      // ✅ Chưa có ví → bắt buộc qua setup-wallet, có ví rồi → vào thẳng dashboard
+      if (!loginData?.walletAddress) {
+        localStorage.setItem("redirectAfterWallet", roleRedirect[userRole] || "/");
+        navigate("/setup-wallet");
+      } else {
+        navigate(roleRedirect[userRole] || "/");
+      }
     } catch (error) {
       const msg = error.response?.data?.message || error.message || "Đăng nhập thất bại!";
       setErrors({ general: msg });
@@ -326,6 +344,7 @@ const Login = () => {
       position: "relative", overflow: "hidden",
     }}>
       <AnimatedBg />
+      <FloatingIcons />
 
       {/* ── LEFT PANEL ── */}
       <div style={{
