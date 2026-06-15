@@ -122,7 +122,7 @@ const registerPatient = async (req, res) => {
 // ✅ Đăng nhập bằng ví MetaMask
 const loginWithWallet = async (req, res) => {
   try {
-    const { walletAddress } = req.body;
+    const { walletAddress, selectedRole } = req.body;
     if (!walletAddress) {
       return res.status(400).json({ success: false, message: "Vui lòng cung cấp địa chỉ ví!" });
     }
@@ -135,6 +135,14 @@ const loginWithWallet = async (req, res) => {
 
     if (!user) {
       return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản liên kết với ví này! Vui lòng đăng nhập bằng email trước." });
+    }
+
+    if (selectedRole && user.role !== selectedRole) {
+      const roleNameVi = selectedRole === 'doctor' ? 'Bác sĩ' : selectedRole === 'patient' ? 'Bệnh nhân' : 'Admin';
+      return res.status(403).json({ 
+        success: false, 
+        message: `Ví này đã được liên kết với tài khoản có quyền [${user.role === 'patient' ? 'Bệnh nhân' : 'Bác sĩ'}]. Bạn không thể đăng nhập với tư cách ${roleNameVi}!` 
+      });
     }
 
     const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";

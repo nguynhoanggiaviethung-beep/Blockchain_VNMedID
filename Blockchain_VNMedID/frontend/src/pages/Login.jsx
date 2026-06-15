@@ -283,8 +283,11 @@ const Login = () => {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0];
 
+      const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
+      const selectedRole = roleMap[role];
+
       // ✅ Luôn đăng nhập bằng ví — không dùng token cũ
-      const response = await api.post("/auth/login-wallet", { walletAddress });
+      const response = await api.post("/auth/login-wallet", { walletAddress, selectedRole });
       const loginData = response.data?.data;
       console.log("🔍 loginData:", loginData); // ← thêm dòng này
       if (!loginData?.token) throw new Error("Không nhận được token!");
