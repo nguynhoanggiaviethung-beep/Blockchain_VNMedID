@@ -1,8 +1,6 @@
 const Invoice = require('../models/Invoice');
 const { ethers } = require('ethers');
-
 const { getContractInstance } = require('../config/web3');
-
 
 // POST /invoices — Tạo hóa đơn (Admin)
 exports.createInvoice = async (req, res) => {
@@ -104,14 +102,15 @@ exports.getMyInvoices = async (req, res) => {
     const mongoose = require('mongoose');
     const db = mongoose.connection.db;
 
-    // Lấy userId từ token (xacThucToken decode → req.user.userId)
-    const userId = req.user?.userId;
+    // Thay thế đoạn cũ bằng dòng check đa hướng bao quát tất cả token middleware của bạn
+    const userId = req.userId || req.user?.userId || req.user?.id;
     let patientWallet = null;
 
     // Tìm walletAddress của user trong DB
     if (userId) {
       try {
-        const objId = new mongoose.Types.ObjectId(userId);
+        let objId;
+        try { objId = new mongoose.Types.ObjectId(userId); } catch(_) { objId = userId; }
         const user = await db.collection('users').findOne({ _id: objId });
         patientWallet = user?.walletAddress || null;
       } catch {}

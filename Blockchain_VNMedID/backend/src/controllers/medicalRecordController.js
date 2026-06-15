@@ -1,5 +1,6 @@
 const MedicalRecord = require('../models/MedicalRecord'); 
 const Visit = require('../models/Visit');
+const Invoice = require('../models/Invoice'); // ✅ Thêm import Model Invoice để tự động sinh hóa đơn
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
@@ -72,7 +73,6 @@ const getDoctorPendingList = async (req, res) => {
 
             try {
                 const db = mongoose.connection.db;
-                // ✅ FIX: _id trong DB là string → thử cả ObjectId lẫn string
                 let patient = null;
                 try {
                     const objId = new mongoose.Types.ObjectId(v.patientId);
@@ -124,7 +124,6 @@ const getDoctorCompletedList = async (req, res) => {
             };
             try {
                 const db = mongoose.connection.db;
-                // ✅ FIX: _id trong DB là string → thử cả ObjectId lẫn string
                 let patient = null;
                 try {
                     const objId = new mongoose.Types.ObjectId(v.patientId);
@@ -182,10 +181,9 @@ const completeVisit = async (req, res) => {
             return res.status(400).json({ success: false, message: "Thiếu thông tin bệnh án!" });
         }
 
-        // ✅ FIX: _id là string → dùng findOneAndUpdate thay vì findByIdAndUpdate
-       const db = mongoose.connection.db;
-       const visitObjectId = new mongoose.Types.ObjectId(recordId);
-       await db.collection('visits').updateOne(
+        const db = mongoose.connection.db;
+        const visitObjectId = new mongoose.Types.ObjectId(recordId);
+        await db.collection('visits').updateOne(
            { _id: visitObjectId },
             { $set: {
                 chanDoanChuyenMon: diagnose,
@@ -218,6 +216,50 @@ const completeVisit = async (req, res) => {
         } catch (bcError) {
             console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
         }
+
+        // ========================================================
+        // 💳 ĐOẠN THÊM VÀO: TỰ ĐỘNG SINH HÓA ĐƠN KHI BÁC SĨ KHÁM XONG
+        // ========================================================
+        try {
+            let patientObjectId;
+            try { patientObjectId = new mongoose.Types.ObjectId(visit.patientId); } catch(_) {}
+            
+            // Tìm ví MetaMask của bệnh nhân từ bảng users công khai
+            const patientUser = await db.collection('users').findOne({ 
+                $or: [{ _id: patientObjectId }, { _id: visit.patientId }] 
+            });
+
+            if (patientUser && patientUser.walletAddress) {
+                // Tạo ngẫu nhiên ID hóa đơn duy nhất không trùng lặp
+                const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
+                
+                // Đặt số tiền viện phí/tiền thuốc (mặc định ví dụ là 0.002 ETH)
+                const defaultAmount = 0.002; 
+
+                // 1. Lưu hóa đơn Off-chain vào MongoDB
+                const autoInvoice = new Invoice({
+                    invoiceId: generatedInvoiceId,
+                    amount: defaultAmount,
+                    patientWallet: patientUser.walletAddress,
+                    paymentStatus: 'pending',
+                    createdAt: new Date()
+                });
+                await autoInvoice.save();
+
+                // 2. Đồng bộ hóa đơn On-chain lên Smart Contract Payment mạng Sepolia
+                const paymentContract = getContractInstance('payment');
+                const amountWei = ethers.parseEther(defaultAmount.toString());
+                const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
+                await paymentTx.wait();
+                
+                console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientUser.walletAddress}`);
+            } else {
+                console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
+            }
+        } catch (invoiceError) {
+            console.error('❌ Lỗi tự động sinh hóa đơn:', invoiceError.message);
+        }
+        // ========================================================
 
         return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit, recordTxHash });
     } catch (error) {
