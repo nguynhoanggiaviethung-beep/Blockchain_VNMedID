@@ -113,7 +113,7 @@ const registerPatient = async (req, res) => {
   }
 };
 
-// ✅ Đăng nhập bằng ví MetaMask
+// ✅ Đăng nhập bằng ví MetaMask — tìm không phân biệt hoa thường
 const loginWithWallet = async (req, res) => {
   try {
     const { walletAddress } = req.body;
@@ -122,7 +122,11 @@ const loginWithWallet = async (req, res) => {
     }
 
     const db = mongoose.connection.db;
-    const user = await db.collection("users").findOne({ walletAddress: walletAddress.toLowerCase() });
+
+    // Tìm không phân biệt hoa thường (case-insensitive)
+    const user = await db.collection("users").findOne({
+      walletAddress: { $regex: new RegExp(`^${walletAddress}$`, 'i') }
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản liên kết với ví này!" });
@@ -141,7 +145,7 @@ const loginWithWallet = async (req, res) => {
   }
 };
 
-// ✅ Lưu ví MetaMask sau khi đăng nhập
+// ✅ Lưu ví MetaMask — giữ nguyên format không lowercase
 const saveWallet = async (req, res) => {
   try {
     const { walletAddress } = req.body;
@@ -154,13 +158,12 @@ const saveWallet = async (req, res) => {
 
     await db.collection("users").updateOne(
       { _id: userId },
-      { $set: { walletAddress: walletAddress.toLowerCase(), updatedAt: new Date() } }
+      { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
     );
 
-    // Cập nhật cả trong patients nếu là bệnh nhân
     await db.collection("patients").updateOne(
       { _id: userId },
-      { $set: { walletAddress: walletAddress.toLowerCase(), updatedAt: new Date() } }
+      { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
     );
 
     return res.status(200).json({ success: true, message: "Lưu ví thành công!", data: { walletAddress } });
