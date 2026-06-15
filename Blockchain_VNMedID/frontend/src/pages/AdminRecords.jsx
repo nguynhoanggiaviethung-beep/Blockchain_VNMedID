@@ -12,7 +12,7 @@ const SUCCESS_LIGHT = "#DCFCE7";
 const WARNING = "#D97706";
 const WARNING_LIGHT = "#FEF3C7";
 
-const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1";
+const BASE_URL = "https://victorious-commitment-production-250c.up.railway.app/api/v1";
 
 const STATUS_MAP = {
   pending: {

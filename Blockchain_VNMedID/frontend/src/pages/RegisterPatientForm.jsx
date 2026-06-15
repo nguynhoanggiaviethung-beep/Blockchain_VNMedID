@@ -23,7 +23,7 @@ const RegisterPatientForm = () => {
     setStatusMessage('');
     try {
       const response = await axios.post(
-        'https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient',
+        'https://victorious-commitment-production-250c.up.railway.app/api/v1/auth/register-patient',
         patientData
       );
       if (response.data.success) {
