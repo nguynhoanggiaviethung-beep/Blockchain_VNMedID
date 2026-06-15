@@ -25,7 +25,7 @@ export default function PatientBookingForm({ onBookingSuccess }) {
       const patientName = localStorage.getItem('fullName');
 
       const response = await axios.post(
-        'https://victorious-commitment-production-ba03.up.railway.app/api/v1/visits', // ✅ đúng endpoint
+        'https://blockchainvnmedid-production.up.railway.app/api/v1/visits', // ✅ đúng endpoint
         {
           patientId,
           patientName,

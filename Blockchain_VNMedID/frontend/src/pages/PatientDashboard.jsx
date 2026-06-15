@@ -14,7 +14,7 @@ const WHITE = "#FFFFFF"
 const GRAY_TEXT = "#5F6B7A"
 const BORDER = "#CBD5E1"
 
-const BASE_URL = "https://victorious-commitment-production-ba03.up.railway.app/api/v1"
+const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
 // ✅ Payment contract address trên Sepolia
 const PAYMENT_CONTRACT_ADDRESS = "0x1f2db9bc029a2d2851ba25241f6cb0c06a21bdcc1d1e4cfe364f1cdcdb614f05"

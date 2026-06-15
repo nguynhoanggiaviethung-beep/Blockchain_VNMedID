@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 
 const PRIMARY = "#0A2D6E"
 const PRIMARY_MED = "#1A4FA8"
-const BASE_URL = "https://victorious-commitment-production-ba03.up.railway.app/api/v1"
+const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
 export default function SetupWallet() {
   const navigate = useNavigate()

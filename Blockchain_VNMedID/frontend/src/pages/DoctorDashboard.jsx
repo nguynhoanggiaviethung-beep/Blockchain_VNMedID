@@ -8,7 +8,7 @@ const PRIMARY_LIGHT = "#E6F1FB"
 const GRAY_TEXT = "#5F6B7A"
 const BORDER = "#CBD5E1"
 
-const BASE_URL = "https://victorious-commitment-production-ba03.up.railway.app/api/v1"
+const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
 export default function DoctorDashboard() {
   const navigate = useNavigate()
