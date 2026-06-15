@@ -272,19 +272,43 @@ const Login = () => {
   };
 
   const connectMetaMask = async () => {
-    if (!window.ethereum) { alert("Vui lòng cài đặt MetaMask!"); return; }
+    if (!window.ethereum) {
+      setErrors({ general: "Vui lòng cài đặt MetaMask trên trình duyệt!" });
+      return;
+    }
     try {
+      setLoading(true);
+      setErrors({});
+
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0];
-      const token = localStorage.getItem("token");
-      if (token) {
-        await api.put("/auth/wallet", { walletAddress }, { headers: { Authorization: `Bearer ${token}` } });
-        alert("Đã kết nối và lưu ví: " + walletAddress);
-      } else {
-        alert("Đã kết nối ví: " + walletAddress + " (cần đăng nhập để lưu)");
+
+      // ✅ Luôn đăng nhập bằng ví — không dùng token cũ
+      const response = await api.post("/auth/login-wallet", { walletAddress });
+      const loginData = response.data?.data;
+      if (!loginData?.token) throw new Error("Không nhận được token!");
+
+      localStorage.clear();
+      localStorage.setItem("token", loginData.token);
+      localStorage.setItem("userRole", loginData.role);
+      localStorage.setItem("userId", String(loginData.userId));
+      localStorage.setItem("fullName", loginData.fullName || "Người dùng VNmedID");
+      localStorage.setItem("walletAddress", walletAddress);
+
+      if (loginData.role === "doctor") {
+        localStorage.setItem("chuyenKhoa", loginData.specialty || "");
+        localStorage.setItem("maBacSi", loginData.licenseNumber || "");
       }
+
+      const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
+      setSuccess(true);
+      navigate(roleRedirect[loginData.role] || "/");
+
     } catch (err) {
-      alert("Kết nối ví thất bại!");
+      const msg = err.response?.data?.message || err.message || "Kết nối ví thất bại!";
+      setErrors({ general: msg });
+    } finally {
+      setLoading(false);
     }
   };
 
