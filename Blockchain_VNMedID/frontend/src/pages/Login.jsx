@@ -228,21 +228,54 @@ const Login = () => {
   };
 
   const connectMetaMask = async () => {
-    if (!window.ethereum) { alert("Vui lòng cài đặt MetaMask!"); return; }
-    try {
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      const walletAddress = accounts[0];
-      const token = localStorage.getItem("token");
-      if (token) {
-        await api.put("/auth/wallet", { walletAddress }, { headers: { Authorization: `Bearer ${token}` } });
-        alert("Đã kết nối và lưu ví: " + walletAddress);
-      } else {
-        alert("Đã kết nối ví: " + walletAddress + " (cần đăng nhập để lưu)");
-      }
-    } catch (err) {
-      alert("Kết nối ví thất bại!");
+  if (!window.ethereum) {
+    setErrors({ general: "Vui lòng cài đặt MetaMask!" });
+    return;
+  }
+  try {
+    const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+    const walletAddress = accounts[0];
+
+    // Nếu đã đăng nhập → chỉ lưu ví vào DB
+    const token = localStorage.getItem("token");
+    if (token) {
+      await api.put("/auth/wallet", { walletAddress }, { headers: { Authorization: `Bearer ${token}` } });
+      alert("✅ Đã liên kết ví thành công: " + walletAddress);
+      return;
     }
-  };
+
+    // Chưa đăng nhập → login bằng ví
+    setLoading(true);
+    const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
+    const response = await api.post("/auth/login-wallet", {
+      walletAddress,
+      role: roleMap[role]
+    });
+
+    const loginData = response.data?.data;
+    if (!loginData?.token) throw new Error("Không nhận được token!");
+
+    localStorage.setItem("token", loginData.token);
+    localStorage.setItem("userRole", loginData.role);
+    localStorage.setItem("userId", String(loginData.userId));
+    localStorage.setItem("fullName", loginData.fullName || "Người dùng VNmedID");
+
+    if (loginData.role === "doctor") {
+      localStorage.setItem("chuyenKhoa", loginData.specialty || "");
+      localStorage.setItem("maBacSi", loginData.licenseNumber || "");
+    }
+
+    const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
+    setSuccess(true);
+    navigate("/setup-wallet");
+
+  } catch (err) {
+    const msg = err.response?.data?.message || err.message || "Kết nối ví thất bại!";
+    setErrors({ general: msg });
+  } finally {
+    setLoading(false);
+  }
+};
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -278,7 +311,7 @@ const Login = () => {
       }
       const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
       setSuccess(true);
-      navigate(roleRedirect[userRole] || "/");
+      navigate("/setup-wallet");
     } catch (error) {
       const msg = error.response?.data?.message || error.message || "Đăng nhập thất bại!";
       setErrors({ general: msg });

@@ -1,8 +1,8 @@
 const express = require('express');
 const router = express.Router();
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
-const { createInvoice, makePayment } = require('../controllers/invoiceController');
-
+const { createInvoice, makePayment, getMyInvoices } = require('../controllers/invoiceController')
+router.get('/my', xacThucToken, phanQuyen('patient'), getMyInvoices);
 // Tạo hóa đơn — chỉ Admin
 router.post('/', xacThucToken, phanQuyen('admin'), createInvoice);
 

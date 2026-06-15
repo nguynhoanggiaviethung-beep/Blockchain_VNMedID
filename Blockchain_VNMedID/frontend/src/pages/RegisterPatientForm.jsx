@@ -5,59 +5,33 @@ const PRIMARY = "#0A2D6E";
 const PRIMARY_MED = "#1A4FA8";
 
 const RegisterPatientForm = () => {
-  const [step, setStep] = useState(1); // 1: điền thông tin, 2: kết nối ví
   const [patientData, setPatientData] = useState({
     email: '', password: '', fullName: '', dob: '',
     gender: '', phone: '', address: '', citizenId: ''
   });
   const [statusMessage, setStatusMessage] = useState('');
-  const [statusType, setStatusType] = useState(''); // 'success' | 'error'
-  const [walletAddress, setWalletAddress] = useState('');
+  const [statusType, setStatusType] = useState('');
   const [registering, setRegistering] = useState(false);
 
   const handleChange = (e) => {
     setPatientData({ ...patientData, [e.target.name]: e.target.value });
   };
 
-  // Bước 1: Submit thông tin → chuyển sang bước 2
-  const handleSubmitInfo = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    setStep(2);
-  };
-
-  // Bước 2: Kết nối MetaMask → đăng ký
-  const handleConnectAndRegister = async () => {
-    // Kiểm tra MetaMask đã cài chưa
-    if (!window.ethereum) {
-      window.open('https://metamask.io/download/', '_blank');
-      return;
-    }
-
+    setRegistering(true);
+    setStatusMessage('');
     try {
-      setRegistering(true);
-      setStatusMessage('');
-
-      // Yêu cầu kết nối ví
-      const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
-      const wallet = accounts[0];
-      setWalletAddress(wallet);
-
-      // Gửi đăng ký kèm địa chỉ ví
       const response = await axios.post(
         'https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient',
-        { ...patientData, walletAddress: wallet }
+        patientData
       );
-
       if (response.data.success) {
-        setStatusMessage('🎉 Đăng ký thành công! Ví MetaMask đã được liên kết.');
+        setStatusMessage('🎉 Đăng ký thành công! Vui lòng đăng nhập để tiếp tục.');
         setStatusType('success');
       }
     } catch (error) {
-      if (error.code === 4001) {
-        setStatusMessage('Bạn đã từ chối kết nối ví. Vui lòng thử lại!');
-      } else {
-        setStatusMessage(error.response?.data?.message || 'Lỗi kết nối hệ thống.');
-      }
+      setStatusMessage(error.response?.data?.message || 'Lỗi kết nối hệ thống.');
       setStatusType('error');
     } finally {
       setRegistering(false);
@@ -78,124 +52,41 @@ const RegisterPatientForm = () => {
     fontFamily: '"Inter", system-ui, sans-serif',
   };
 
-  // ── BƯỚC 2: Kết nối ví ──
-  if (step === 2) {
-    const hasMetaMask = !!window.ethereum;
+  if (statusType === 'success') {
     return (
-      <div style={{ padding: '8px 0' }}>
-        <h3 style={{ textAlign: 'center', color: PRIMARY, fontWeight: 700, fontSize: 18, marginBottom: 8 }}>
-          🔗 Liên kết ví MetaMask
-        </h3>
-        <p style={{ textAlign: 'center', color: '#5F6B7A', fontSize: 13, marginBottom: 28, lineHeight: 1.6 }}>
-          Thông tin của bạn đã sẵn sàng.<br />
-          Bước cuối cùng: kết nối ví MetaMask để hoàn tất đăng ký.
-        </p>
-
-        {/* Box thông tin ví */}
-        {walletAddress ? (
-          <div style={{
-            background: '#F0FDF4', border: '1.5px solid #86EFAC',
-            borderRadius: 10, padding: '14px 18px', marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <span style={{ fontSize: 24 }}>✅</span>
-            <div>
-              <div style={{ fontWeight: 700, color: '#15803D', fontSize: 13 }}>Ví đã kết nối!</div>
-              <div style={{ fontSize: 11, color: '#166534', wordBreak: 'break-all', marginTop: 2 }}>
-                {walletAddress}
-              </div>
-            </div>
-          </div>
-        ) : (
-          <div style={{
-            background: hasMetaMask ? '#EFF6FF' : '#FEF3C7',
-            border: `1.5px solid ${hasMetaMask ? '#BFDBFE' : '#FDE68A'}`,
-            borderRadius: 10, padding: '14px 18px', marginBottom: 20,
-            display: 'flex', alignItems: 'center', gap: 12,
-          }}>
-            <span style={{ fontSize: 24 }}>{hasMetaMask ? '🦊' : '⚠️'}</span>
-            <div>
-              <div style={{ fontWeight: 700, color: hasMetaMask ? '#1D4ED8' : '#B45309', fontSize: 13 }}>
-                {hasMetaMask ? 'MetaMask đã được cài đặt' : 'Chưa cài MetaMask'}
-              </div>
-              <div style={{ fontSize: 12, color: hasMetaMask ? '#1E40AF' : '#92400E', marginTop: 2 }}>
-                {hasMetaMask
-                  ? 'Bấm nút bên dưới để kết nối ví của bạn'
-                  : 'Bấm nút bên dưới để cài đặt MetaMask trước'}
-              </div>
-            </div>
-          </div>
-        )}
-
-        {/* Nút kết nối / cài MetaMask */}
-        {!statusMessage && (
-          <button
-            onClick={handleConnectAndRegister}
-            disabled={registering}
-            style={{
-              width: '100%', padding: '13px 0', borderRadius: 10, border: 'none',
-              background: registering ? '#93B8E8' : hasMetaMask
-                ? `linear-gradient(90deg, ${PRIMARY}, ${PRIMARY_MED})`
-                : 'linear-gradient(90deg, #F59E0B, #D97706)',
-              color: '#fff', fontSize: 15, fontWeight: 700,
-              cursor: registering ? 'not-allowed' : 'pointer',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10,
-            }}
-          >
-            {registering ? (
-              '⏳ Đang xử lý...'
-            ) : hasMetaMask ? (
-              <>
-                <svg width="20" height="20" viewBox="0 0 35 33" fill="none">
-                  <path d="M32.958 1L19.41 10.692l2.519-5.937L32.958 1z" fill="#E2761B" />
-                  <path d="M2.025 1l13.435 9.784-2.4-5.937L2.025 1z" fill="#E4761B" />
-                </svg>
-                Kết nối MetaMask & Hoàn tất đăng ký
-              </>
-            ) : (
-              '📥 Cài đặt MetaMask ngay'
-            )}
-          </button>
-        )}
-
-        {/* Thông báo kết quả */}
-        {statusMessage && (
-          <div style={{
-            background: statusType === 'success' ? '#F0FDF4' : '#FEF2F2',
-            border: `1px solid ${statusType === 'success' ? '#86EFAC' : '#FCA5A5'}`,
-            borderRadius: 8, padding: '12px 16px', marginTop: 16,
-            color: statusType === 'success' ? '#15803D' : '#DC2626',
-            fontSize: 13, fontWeight: 600, textAlign: 'center',
-          }}>
-            {statusMessage}
-          </div>
-        )}
-
-        {/* Nút quay lại */}
-        {!statusMessage && (
-          <button onClick={() => setStep(1)} style={{
-            width: '100%', marginTop: 12, padding: '10px 0', borderRadius: 8,
-            border: '1.5px solid #CBD5E1', background: '#fff',
-            color: '#5F6B7A', fontSize: 13, fontWeight: 600, cursor: 'pointer',
-          }}>
-            ← Quay lại chỉnh sửa thông tin
-          </button>
-        )}
+      <div style={{ padding: '20px 0', textAlign: 'center' }}>
+        <div style={{ fontSize: 52, marginBottom: 16 }}>🎉</div>
+        <div style={{ fontSize: 18, fontWeight: 700, color: PRIMARY, marginBottom: 8 }}>
+          Đăng ký thành công!
+        </div>
+        <div style={{ fontSize: 14, color: '#5F6B7A', lineHeight: 1.6 }}>
+          Tài khoản của bạn đã được tạo.<br />
+          Vui lòng đăng nhập để kết nối ví MetaMask.
+        </div>
       </div>
     );
   }
 
-  // ── BƯỚC 1: Điền thông tin ──
   return (
     <div style={{ padding: '4px 0' }}>
-      <h3 style={{ textAlign: 'center', color: PRIMARY, fontWeight: 700, fontSize: 25, marginBottom: 4 }}>
+      <h3 style={{ textAlign: 'center', color: PRIMARY, fontWeight: 700, fontSize: 22, marginBottom: 4 }}>
         ĐĂNG KÝ BỆNH NHÂN MỚI
       </h3>
-      <p style={{ textAlign: 'center', color: '#5F6B7A', fontSize: 15, marginBottom: 24 }}>
-        Bước 1/2 — Điền thông tin cá nhân
+      <p style={{ textAlign: 'center', color: '#5F6B7A', fontSize: 14, marginBottom: 20 }}>
+        Điền thông tin cá nhân để tạo tài khoản
       </p>
 
-      <form onSubmit={handleSubmitInfo} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
+      {statusMessage && statusType === 'error' && (
+        <div style={{
+          background: '#FEF2F2', border: '1px solid #FCA5A5',
+          borderRadius: 8, padding: '10px 14px', marginBottom: 16,
+          color: '#DC2626', fontSize: 13, fontWeight: 600, textAlign: 'center',
+        }}>
+          {statusMessage}
+        </div>
+      )}
+
+      <form onSubmit={handleSubmit} style={{ display: 'flex', flexDirection: 'column', gap: 14 }}>
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Họ và tên *</label>
@@ -236,12 +127,13 @@ const RegisterPatientForm = () => {
           </div>
         </div>
 
-        <button type="submit" style={{
+        <button type="submit" disabled={registering} style={{
           padding: '13px', borderRadius: 10, border: 'none',
-          background: `linear-gradient(90deg, ${PRIMARY}, ${PRIMARY_MED})`,
-          color: '#fff', fontSize: 15, fontWeight: 700, cursor: 'pointer', marginTop: 4,
+          background: registering ? '#93B8E8' : `linear-gradient(90deg, ${PRIMARY}, ${PRIMARY_MED})`,
+          color: '#fff', fontSize: 15, fontWeight: 700,
+          cursor: registering ? 'not-allowed' : 'pointer', marginTop: 4,
         }}>
-          Tiếp theo → Kết nối ví MetaMask
+          {registering ? '⏳ Đang đăng ký...' : '✅ Tạo tài khoản'}
         </button>
       </form>
     </div>

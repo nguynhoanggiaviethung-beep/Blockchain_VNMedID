@@ -1,30 +1,22 @@
-const { xacThucToken } = require('../middleware/authMiddleware');
-
-// API Format/src/routes/authRoutes.js
-const express = require('express'); // 🔥 ĐÃ SỬA: Chuyển từ import sang require
+const express = require('express');
 const router = express.Router();
+const { xacThucToken } = require('../middleware/authMiddleware');
 const authController = require('../controllers/authController');
 
-// POST /api/v1/auth/register -> Đăng ký
+// POST /api/v1/auth/register → Đăng ký bác sĩ/admin
 router.post('/register', authController.register);
 
-// POST /api/v1/auth/login -> Đăng nhập 
+// POST /api/v1/auth/login → Đăng nhập bằng email
 router.post('/login', authController.login);
-// POST /api/v1/auth/register-patient -> Đăng ký bệnh nhân
+
+// POST /api/v1/auth/register-patient → Đăng ký bệnh nhân
 router.post('/register-patient', authController.registerPatient);
+
+// ✅ POST /api/v1/auth/login-wallet → Đăng nhập bằng ví MetaMask
+router.post('/login-wallet', authController.loginWithWallet);
+
+// ✅ PUT /api/v1/auth/wallet → Lưu ví MetaMask sau khi đăng nhập
+router.put('/wallet', xacThucToken, authController.saveWallet);
+
+// ⚠️ module.exports PHẢI đặt cuối cùng
 module.exports = router;
-router.put('/wallet', xacThucToken, async (req, res) => {
-  try {
-    const { walletAddress } = req.body;
-    const db = mongoose.connection.db;
-
-    await db.collection('users').updateOne(
-      { _id: new mongoose.Types.ObjectId(req.user.userId) },
-      { $set: { walletAddress } }
-    );
-
-    return res.json({ success: true, message: 'Đã lưu ví thành công!' });
-  } catch (err) {
-    return res.status(500).json({ success: false, message: err.message });
-  }
-});

@@ -4,23 +4,35 @@ import PatientDashboard from './pages/PatientDashboard'
 import DoctorDashboard from './pages/DoctorDashboard'
 import AdminDashboard from './pages/AdminDashboard'
 import DoctorExamination from './pages/DoctorExamination'
+import SetupWallet from './pages/SetupWallet'
 
-// Component bọc bảo vệ (Protected Route)
+// ✅ Protected Route — kiểm tra token + role
 const ProtectedRoute = ({ children, allowedRoles }) => {
-  // ✅ FIX: đổi 'role' → 'userRole' cho khớp với key Login.jsx lưu
-  const userRole = localStorage.getItem('userRole');
-  const token = localStorage.getItem('token');
+  const userRole = localStorage.getItem('userRole')
+  const token = localStorage.getItem('token')
 
   if (!token || !userRole) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" replace />
   }
 
   if (allowedRoles && !allowedRoles.includes(userRole)) {
-    return <Navigate to="/" replace />;
+    return <Navigate to="/" replace />
   }
 
-  return children;
-};
+  return children
+}
+
+// ✅ Wallet Route — chỉ vào được khi đã đăng nhập
+const WalletRoute = ({ children }) => {
+  const token = localStorage.getItem('token')
+  const userRole = localStorage.getItem('userRole')
+
+  if (!token || !userRole) {
+    return <Navigate to="/" replace />
+  }
+
+  return children
+}
 
 function App() {
   return (
@@ -29,7 +41,17 @@ function App() {
         {/* Trang đăng nhập công khai */}
         <Route path="/" element={<Login />} />
 
-        {/* 1. Trang cá nhân của Bệnh nhân */}
+        {/* ✅ Trang setup ví — sau khi đăng nhập, trước khi vào dashboard */}
+        <Route
+          path="/setup-wallet"
+          element={
+            <WalletRoute>
+              <SetupWallet />
+            </WalletRoute>
+          }
+        />
+
+        {/* 1. Trang bệnh nhân */}
         <Route
           path="/dashboard/patient"
           element={
@@ -38,8 +60,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
-        {/* 2. Trang chủ Dashboard của Bác sĩ */}
+
+        {/* 2. Trang bác sĩ */}
         <Route
           path="/dashboard/doctor"
           element={
@@ -49,7 +71,7 @@ function App() {
           }
         />
 
-        {/* Trang nhập đơn thuốc/chẩn đoán của Bác sĩ */}
+        {/* Trang khám bệnh */}
         <Route
           path="/dashboard/doctor/diagnose/:id"
           element={
@@ -58,8 +80,8 @@ function App() {
             </ProtectedRoute>
           }
         />
-        
-        {/* 3. Trang của Quản trị viên */}
+
+        {/* 3. Trang admin */}
         <Route
           path="/dashboard/admin"
           element={
@@ -69,7 +91,7 @@ function App() {
           }
         />
 
-        {/* Nếu gõ sai đường dẫn, tự động đẩy về trang Login */}
+        {/* Fallback */}
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>

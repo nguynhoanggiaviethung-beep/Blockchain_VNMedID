@@ -44,7 +44,7 @@ exports.createInvoice = async (req, res) => {
   }
 };
 
-// POST /payments — Thanh toán (Patient)
+// POST /invoices/payments — Thanh toán (Patient)
 exports.makePayment = async (req, res) => {
   try {
     const { invoiceId, txHash } = req.body;
@@ -58,11 +58,9 @@ exports.makePayment = async (req, res) => {
       return res.status(404).json({ success: false, message: 'Không tìm thấy hóa đơn!' });
     }
 
-    // === CẬP NHẬT DATABASE (CÓ CHECK VÀ BỔ SUNG PATIENT WALLET) ===
     invoice.txHash = txHash;
     invoice.paymentStatus = 'paid';
 
-    // Nếu trong body gửi lên có truyền patientWallet, và trong database chưa có hoặc khác ví cũ
     if (req.body.patientWallet) {
       invoice.patientWallet = req.body.patientWallet;
       console.log(`📝 Đã cập nhật/bổ sung ví bệnh nhân: ${req.body.patientWallet}`);
@@ -71,19 +69,11 @@ exports.makePayment = async (req, res) => {
     }
 
     await invoice.save();
-    // =============================================================
-    
-// Đồng bộ lên blockchain
-  // === XÁC THỰC BLOCKCHAIN CHUẨN ABI TRẢ VỀ ===
+
     try {
       const paymentContract = getContractInstance('payment');
-      
-      // Gọi hàm invoices lấy dữ liệu on-chain của invoiceId này
       const onChainData = await paymentContract.invoices(invoiceId);
-      
-      // Vì onChainData trả về mảng: [patientWallet, amount, paid]
-      // Nên onChainData[2] chính là giá trị của biến 'paid' (true/false)
-      const isPaidOnChain = onChainData[2]; 
+      const isPaidOnChain = onChainData[2];
 
       if (!isPaidOnChain) {
         return res.status(400).json({ 
@@ -97,13 +87,52 @@ exports.makePayment = async (req, res) => {
       console.error('❌ Lỗi xác thực Blockchain:', bcError.message);
       return res.status(500).json({ success: false, message: 'Hệ thống không thể kết nối Blockchain mạng Sepolia!', error: bcError.message });
     }
-    // ===========================================
 
     return res.status(200).json({
       success: true,
       message: 'Thanh toán thành công!',
       data: { paymentStatus: 'paid' }
     });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
+
+// ✅ GET /invoices/my — Lấy hóa đơn của bệnh nhân (Patient)
+exports.getMyInvoices = async (req, res) => {
+  try {
+    const mongoose = require('mongoose');
+    const db = mongoose.connection.db;
+
+    // Lấy userId từ token (xacThucToken decode → req.user.userId)
+    const userId = req.user?.userId;
+    let patientWallet = null;
+
+    // Tìm walletAddress của user trong DB
+    if (userId) {
+      try {
+        const objId = new mongoose.Types.ObjectId(userId);
+        const user = await db.collection('users').findOne({ _id: objId });
+        patientWallet = user?.walletAddress || null;
+      } catch {}
+    }
+
+    // Fallback: lấy từ query nếu frontend gửi lên
+    if (!patientWallet) {
+      patientWallet = req.query.wallet || null;
+    }
+
+    // Không có wallet → trả mảng rỗng, không báo lỗi
+    if (!patientWallet) {
+      return res.json({ success: true, data: [], message: 'Chưa liên kết ví MetaMask' });
+    }
+
+    // Tìm hóa đơn, case-insensitive để tránh lỗi chữ hoa/thường
+    const invoices = await Invoice.find({
+      patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
+    }).sort({ createdAt: -1 });
+
+    return res.json({ success: true, data: invoices });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
