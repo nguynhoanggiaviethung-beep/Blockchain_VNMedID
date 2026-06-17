@@ -1,6 +1,6 @@
 const MedicalRecord = require('../models/MedicalRecord'); 
 const Visit = require('../models/Visit');
-const Invoice = require('../models/Invoice'); // ✅ Thêm import Model Invoice để tự động sinh hóa đơn
+const Invoice = require('../models/Invoice'); // ✅ Tự động import model hóa đơn
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
@@ -199,7 +199,6 @@ const completeVisit = async (req, res) => {
             return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
         }
 
-        // Đồng bộ hash bệnh án lên blockchain
         let recordTxHash = null;
         try {
             const recordContent = JSON.stringify({ recordId, diagnose, prescription, doctorName });
@@ -218,25 +217,21 @@ const completeVisit = async (req, res) => {
         }
 
         // ========================================================
-        // 💳 ĐOẠN THÊM VÀO: TỰ ĐỘNG SINH HÓA ĐƠN KHI BÁC SĨ KHÁM XONG
+        // 💳 TỰ ĐỘNG SINH HÓA ĐƠN KHI BÁC SĨ KHÁM XONG (ON-CHAIN & OFF-CHAIN)
         // ========================================================
         try {
             let patientObjectId;
             try { patientObjectId = new mongoose.Types.ObjectId(visit.patientId); } catch(_) {}
             
-            // Tìm ví MetaMask của bệnh nhân từ bảng users công khai
             const patientUser = await db.collection('users').findOne({ 
                 $or: [{ _id: patientObjectId }, { _id: visit.patientId }] 
             });
 
             if (patientUser && patientUser.walletAddress) {
-                // Tạo ngẫu nhiên ID hóa đơn duy nhất không trùng lặp
                 const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
-                
-                // Đặt số tiền viện phí/tiền thuốc (mặc định ví dụ là 0.002 ETH)
                 const defaultAmount = 0.002; 
 
-                // 1. Lưu hóa đơn Off-chain vào MongoDB
+                // 1. Lưu hóa đơn vào MongoDB
                 const autoInvoice = new Invoice({
                     invoiceId: generatedInvoiceId,
                     amount: defaultAmount,
@@ -246,7 +241,7 @@ const completeVisit = async (req, res) => {
                 });
                 await autoInvoice.save();
 
-                // 2. Đồng bộ hóa đơn On-chain lên Smart Contract Payment mạng Sepolia
+                // 2. Lưu hóa đơn lên Smart Contract Payment Sepolia
                 const paymentContract = getContractInstance('payment');
                 const amountWei = ethers.parseEther(defaultAmount.toString());
                 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);

@@ -2,7 +2,6 @@ const Invoice = require('../models/Invoice');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
 
-// POST /invoices — Tạo hóa đơn (Admin)
 exports.createInvoice = async (req, res) => {
   try {
     const { invoiceId, amount, patientWallet } = req.body;
@@ -19,7 +18,6 @@ exports.createInvoice = async (req, res) => {
     const invoice = new Invoice({ invoiceId, amount, patientWallet, paymentStatus: 'pending' });
     await invoice.save();
 
-    // Đồng bộ lên blockchain
     let txHash = null;
     try {
       const paymentContract = getContractInstance('payment');
@@ -42,7 +40,6 @@ exports.createInvoice = async (req, res) => {
   }
 };
 
-// POST /invoices/payments — Thanh toán (Patient)
 exports.makePayment = async (req, res) => {
   try {
     const { invoiceId, txHash } = req.body;
@@ -61,9 +58,6 @@ exports.makePayment = async (req, res) => {
 
     if (req.body.patientWallet) {
       invoice.patientWallet = req.body.patientWallet;
-      console.log(`📝 Đã cập nhật/bổ sung ví bệnh nhân: ${req.body.patientWallet}`);
-    } else {
-      console.log(`ℹ️ Giữ nguyên ví bệnh nhân cũ: ${invoice.patientWallet}`);
     }
 
     await invoice.save();
@@ -79,11 +73,9 @@ exports.makePayment = async (req, res) => {
           message: 'Hóa đơn chưa được cập nhật trạng thái PAID trên Smart Contract!' 
         });
       }
-
-      console.log(`✅ Blockchain xác nhận hóa đơn ${invoiceId} đã được thanh toán thật!`);
     } catch (bcError) {
       console.error('❌ Lỗi xác thực Blockchain:', bcError.message);
-      return res.status(500).json({ success: false, message: 'Hệ thống không thể kết nối Blockchain mạng Sepolia!', error: bcError.message });
+      return res.status(500).json({ success: false, message: 'Hệ thống không thể kết nối Blockchain Sepolia!', error: bcError.message });
     }
 
     return res.status(200).json({
@@ -96,17 +88,15 @@ exports.makePayment = async (req, res) => {
   }
 };
 
-// ✅ GET /invoices/my — Lấy hóa đơn của bệnh nhân (Patient)
+// ✅ Fix bóc tách token linh hoạt phục vụ hiển thị trên web deploy
 exports.getMyInvoices = async (req, res) => {
   try {
     const mongoose = require('mongoose');
     const db = mongoose.connection.db;
 
-    // Thay thế đoạn cũ bằng dòng check đa hướng bao quát tất cả token middleware của bạn
     const userId = req.userId || req.user?.userId || req.user?.id;
     let patientWallet = null;
 
-    // Tìm walletAddress của user trong DB
     if (userId) {
       try {
         let objId;
@@ -116,17 +106,14 @@ exports.getMyInvoices = async (req, res) => {
       } catch {}
     }
 
-    // Fallback: lấy từ query nếu frontend gửi lên
     if (!patientWallet) {
       patientWallet = req.query.wallet || null;
     }
 
-    // Không có wallet → trả mảng rỗng, không báo lỗi
     if (!patientWallet) {
       return res.json({ success: true, data: [], message: 'Chưa liên kết ví MetaMask' });
     }
 
-    // Tìm hóa đơn, case-insensitive để tránh lỗi chữ hoa/thường
     const invoices = await Invoice.find({
       patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
     }).sort({ createdAt: -1 });
