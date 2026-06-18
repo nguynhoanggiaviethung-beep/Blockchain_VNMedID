@@ -16,19 +16,27 @@ const BORDER = "#CBD5E1"
 
 const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
-// ✅ Payment contract address trên Sepolia
-const PAYMENT_CONTRACT_ADDRESS = "0x1f2db9bc029a2d2851ba25241f6cb0c06a21bdcc1d1e4cfe364f1cdcdb614f05"
+// ✅ Contract address đúng trên Sepolia
+const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF"
 
-// ✅ ABI chỉ lấy hàm payInvoice cần thiết
-const PAYMENT_ABI = [
-  {
-    "inputs": [{ "internalType": "string", "name": "invoiceId", "type": "string" }],
-    "name": "payInvoice",
-    "outputs": [],
-    "stateMutability": "payable",
-    "type": "function"
-  }
-]
+// ✅ Hàm encode calldata payInvoice(string) thủ công — chuẩn ABI encoding
+function encodePayInvoice(invoiceId) {
+  // Function selector: keccak256("payInvoice(string)") = 0x7c9495b2
+  const selector = "7c9495b2"
+
+  // Encode string theo ABI:
+  // - offset (32 bytes): vị trí bắt đầu data = 0x20 = 32
+  // - length (32 bytes): độ dài chuỗi
+  // - data (padded to 32 bytes)
+  const strBytes = Array.from(new TextEncoder().encode(invoiceId))
+  const offset = "0000000000000000000000000000000000000000000000000000000000000020"
+  const length = strBytes.length.toString(16).padStart(64, "0")
+  const strHex = strBytes.map(b => b.toString(16).padStart(2, "0")).join("")
+  // Pad to multiple of 32 bytes
+  const paddedStr = strHex.padEnd(Math.ceil(strHex.length / 64) * 64, "0")
+
+  return "0x" + selector + offset + length + paddedStr
+}
 
 export default function PatientDashboard() {
   const navigate = useNavigate()
@@ -47,25 +55,22 @@ export default function PatientDashboard() {
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [activeStatFilter, setActiveStatFilter] = useState("all")
 
-  // ✅ State hóa đơn
+  // State hóa đơn
   const [invoiceList, setInvoiceList] = useState([])
   const [loadingInvoice, setLoadingInvoice] = useState(false)
   const [payingId, setPayingId] = useState(null)
   const [invoiceError, setInvoiceError] = useState("")
   const [invoiceSuccess, setInvoiceSuccess] = useState("")
+  const [txPending, setTxPending] = useState("") // txHash đang chờ confirm
 
   const [formBasic, setFormBasic] = useState({
     fullName: "", dob: "", gender: "", phone: "", address: ""
   })
-
   const [formHealth, setFormHealth] = useState({
     nhomMau: "", tienSuBenh: "", diUng: "", trieuChung: "", ghiChu: ""
   })
-
   const [formAppointment, setFormAppointment] = useState({
-    specialty: "Nội khoa",
-    date: null,
-    reason: ""
+    specialty: "Nội khoa", date: null, reason: ""
   })
 
   const headers = {
@@ -82,25 +87,16 @@ export default function PatientDashboard() {
           const d = data.data
           setPatient(d)
           setFormBasic({
-            fullName: d.fullName || "",
-            dob: d.dob ? d.dob.substring(0, 10) : "",
-            gender: d.gender || "",
-            phone: d.phone || "",
-            address: d.address || "",
+            fullName: d.fullName || "", dob: d.dob ? d.dob.substring(0, 10) : "",
+            gender: d.gender || "", phone: d.phone || "", address: d.address || "",
           })
           setFormHealth({
-            nhomMau: d.nhomMau || "",
-            tienSuBenh: d.tienSuBenh || "",
-            diUng: d.diUng || "",
-            trieuChung: d.trieuChung || "",
-            ghiChu: d.ghiChu || "",
+            nhomMau: d.nhomMau || "", tienSuBenh: d.tienSuBenh || "",
+            diUng: d.diUng || "", trieuChung: d.trieuChung || "", ghiChu: d.ghiChu || "",
           })
         }
-      } catch (err) {
-        console.log("Lỗi tải thông tin bệnh nhân:", err)
-      } finally {
-        setLoading(false)
-      }
+      } catch (err) { console.log("Lỗi tải thông tin:", err) }
+      finally { setLoading(false) }
     }
 
     const loadHistory = async () => {
@@ -108,44 +104,35 @@ export default function PatientDashboard() {
         const res = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers })
         const data = await res.json()
         if (data.success) setHistoryList(data.data)
-      } catch (err) {
-        console.log("Lỗi tải lịch sử:", err)
-      } finally {
-        setLoadingHistory(false)
-      }
+      } catch (err) { console.log("Lỗi tải lịch sử:", err) }
+      finally { setLoadingHistory(false) }
     }
 
     if (userId) { load(); loadHistory() }
     else { setLoading(false); setLoadingHistory(false) }
   }, [userId])
 
-  // ✅ Fetch hóa đơn khi vào tab invoice
   const loadInvoices = async () => {
     setLoadingInvoice(true)
     setInvoiceError("")
     try {
       const res = await fetch(`${BASE_URL}/invoices/my`, { headers })
       const data = await res.json()
-      if (data.success) {
-        setInvoiceList(data.data || [])
-      } else {
-        setInvoiceError(data.message || "Không thể tải hóa đơn!")
-      }
-    } catch {
-      setInvoiceError("Lỗi kết nối server!")
-    } finally {
-      setLoadingInvoice(false)
-    }
+      if (data.success) setInvoiceList(data.data || [])
+      else setInvoiceError(data.message || "Không thể tải hóa đơn!")
+    } catch { setInvoiceError("Lỗi kết nối server!") }
+    finally { setLoadingInvoice(false) }
   }
 
   useEffect(() => {
     if (tab === "invoice") loadInvoices()
   }, [tab])
 
-  // ✅ Hàm thanh toán bằng MetaMask
+  // ✅ Hàm thanh toán MetaMask — dùng encodePayInvoice chuẩn
   const handlePayWithMetaMask = async (invoice) => {
     setInvoiceError("")
     setInvoiceSuccess("")
+    setTxPending("")
 
     if (!window.ethereum) {
       setInvoiceError("Vui lòng cài đặt MetaMask để thanh toán!")
@@ -159,40 +146,38 @@ export default function PatientDashboard() {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
       const walletAddress = accounts[0]
 
-      // 2. Chuyển sang mạng Sepolia nếu chưa đúng
+      // 2. Kiểm tra đúng mạng Sepolia
       const chainId = await window.ethereum.request({ method: "eth_chainId" })
       if (chainId !== "0xaa36a7") {
-        await window.ethereum.request({
-          method: "wallet_switchEthereumChain",
-          params: [{ chainId: "0xaa36a7" }]
-        })
-      }
-
-      // 3. Tính amount theo ETH (amount trong DB là ETH)
-      const amountInWei = BigInt(Math.round(invoice.amount * 1e18)).toString(16)
-
-      // 4. Encode calldata cho payInvoice(invoiceId)
-      const encoder = new TextEncoder()
-      const invoiceIdBytes = encoder.encode(invoice.invoiceId)
-      
-      // Dùng ethers từ window hoặc import động
-      // Encode function call thủ công với eth_sendTransaction
-      const iface = {
-        encodeFunctionData: (name, args) => {
-          // Function selector: keccak256("payInvoice(string)") = 0x7c9495b2
-          const selector = "7c9495b2"
-          // Encode string argument
-          const str = args[0]
-          const strHex = Array.from(new TextEncoder().encode(str))
-            .map(b => b.toString(16).padStart(2, "0")).join("")
-          const offset = "0000000000000000000000000000000000000000000000000000000000000020"
-          const length = str.length.toString(16).padStart(64, "0")
-          const padded = strHex.padEnd(Math.ceil(strHex.length / 64) * 64, "0")
-          return "0x" + selector + offset + length + padded
+        try {
+          await window.ethereum.request({
+            method: "wallet_switchEthereumChain",
+            params: [{ chainId: "0xaa36a7" }]
+          })
+        } catch (switchErr) {
+          // Nếu chưa có mạng Sepolia thì thêm vào
+          if (switchErr.code === 4902) {
+            await window.ethereum.request({
+              method: "wallet_addEthereumChain",
+              params: [{
+                chainId: "0xaa36a7",
+                chainName: "Sepolia Testnet",
+                rpcUrls: ["https://rpc.sepolia.org"],
+                nativeCurrency: { name: "SepoliaETH", symbol: "ETH", decimals: 18 },
+                blockExplorerUrls: ["https://sepolia.etherscan.io"]
+              }]
+            })
+          } else throw switchErr
         }
       }
 
-      const data = iface.encodeFunctionData("payInvoice", [invoice.invoiceId])
+      // 3. Tính amount Wei từ ETH
+      // invoice.amount là số ETH (ví dụ 0.001)
+      const amountWei = BigInt(Math.round(invoice.amount * 1e18))
+      const amountHex = "0x" + amountWei.toString(16)
+
+      // 4. Encode calldata payInvoice(invoiceId)
+      const calldata = encodePayInvoice(invoice.invoiceId)
 
       // 5. Gửi transaction qua MetaMask
       const txHash = await window.ethereum.request({
@@ -200,36 +185,44 @@ export default function PatientDashboard() {
         params: [{
           from: walletAddress,
           to: PAYMENT_CONTRACT_ADDRESS,
-          value: "0x" + amountInWei,
-          data: data,
-          gas: "0x30D40", // 200000 gas
+          value: amountHex,
+          data: calldata,
+          gas: "0x493E0", // 300000 gas
         }]
       })
 
-      setInvoiceSuccess(`⏳ Đang xử lý giao dịch... TxHash: ${txHash.slice(0, 20)}...`)
+      setTxPending(txHash)
+      setInvoiceSuccess(`⏳ Giao dịch đã gửi! Đang chờ xác nhận trên Sepolia...`)
 
-      // 6. Chờ transaction confirm (poll 3s x 20 lần)
+      // 6. Poll chờ receipt (3s x 40 lần = 2 phút)
       let confirmed = false
-      for (let i = 0; i < 20; i++) {
+      let receipt = null
+      for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 3000))
         try {
-          const receipt = await window.ethereum.request({
+          receipt = await window.ethereum.request({
             method: "eth_getTransactionReceipt",
             params: [txHash]
           })
-          if (receipt && receipt.status === "0x1") {
-            confirmed = true
+          if (receipt) {
+            confirmed = receipt.status === "0x1"
             break
           }
         } catch {}
       }
 
       if (!confirmed) {
-        setInvoiceError("Giao dịch chưa được xác nhận sau 60 giây. Vui lòng thử lại.")
+        if (receipt && receipt.status === "0x0") {
+          setInvoiceError("❌ Giao dịch thất bại trên blockchain! Kiểm tra số dư hoặc địa chỉ ví.")
+        } else {
+          setInvoiceError("⚠️ Giao dịch chưa được xác nhận sau 2 phút. Kiểm tra lại trên Etherscan.")
+        }
         return
       }
 
-      // 7. Gọi backend xác nhận
+      setInvoiceSuccess(`✅ Blockchain đã xác nhận! Đang cập nhật hệ thống...`)
+
+      // 7. Gọi backend xác nhận + lưu txHash
       const res = await fetch(`${BASE_URL}/invoices/payments`, {
         method: "POST",
         headers,
@@ -242,33 +235,32 @@ export default function PatientDashboard() {
       const result = await res.json()
 
       if (result.success) {
-        setInvoiceSuccess(`✅ Thanh toán thành công! TxHash: ${txHash.slice(0, 20)}...`)
-        await loadInvoices() // reload
+        setInvoiceSuccess(`🎉 Thanh toán thành công! TxHash: ${txHash.slice(0, 20)}...`)
+        setTxPending("")
+        await loadInvoices()
       } else {
         setInvoiceError("Lỗi xác nhận từ server: " + (result.message || ""))
       }
+
     } catch (err) {
       if (err.code === 4001) {
         setInvoiceError("Bạn đã từ chối giao dịch trong MetaMask.")
+      } else if (err.code === -32603) {
+        setInvoiceError("Lỗi contract: Kiểm tra địa chỉ ví có khớp với hóa đơn không, và số dư đủ chưa.")
       } else {
-        setInvoiceError("Lỗi thanh toán: " + (err.message || err))
+        setInvoiceError("Lỗi thanh toán: " + (err.message || String(err)))
       }
     } finally {
       setPayingId(null)
     }
   }
 
-  const showSuccess = (msg) => {
-    setSaveSuccess(msg)
-    setTimeout(() => setSaveSuccess(""), 4000)
-  }
+  const showSuccess = (msg) => { setSaveSuccess(msg); setTimeout(() => setSaveSuccess(""), 4000) }
 
   const handleSaveBasic = async () => {
     setSaving(true); setError("")
     try {
-      const res = await fetch(`${BASE_URL}/patients/${userId}`, {
-        method: "PUT", headers, body: JSON.stringify(formBasic)
-      })
+      const res = await fetch(`${BASE_URL}/patients/${userId}`, { method: "PUT", headers, body: JSON.stringify(formBasic) })
       const data = await res.json()
       if (data.success) { setPatient(data.data); showSuccess("Cập nhật thông tin cá nhân thành công!"); setTab("info") }
       else setError(data.message || "Cập nhật thất bại!")
@@ -279,9 +271,7 @@ export default function PatientDashboard() {
   const handleSaveHealth = async () => {
     setSaving(true); setError("")
     try {
-      const res = await fetch(`${BASE_URL}/patients/${userId}`, {
-        method: "PUT", headers, body: JSON.stringify(formHealth)
-      })
+      const res = await fetch(`${BASE_URL}/patients/${userId}`, { method: "PUT", headers, body: JSON.stringify(formHealth) })
       const data = await res.json()
       if (data.success) { setPatient(data.data); showSuccess("Cập nhật hồ sơ sức khỏe thành công!"); setTab("info") }
       else setError(data.message || "Cập nhật thất bại!")
@@ -296,10 +286,8 @@ export default function PatientDashboard() {
     try {
       const formattedDate = formAppointment.date.format("YYYY-MM-DD")
       const payloadData = {
-        patientId: userId,
-        patientName: localStorage.getItem("fullName"),
-        specialty: formAppointment.specialty,
-        appointmentDate: formattedDate,
+        patientId: userId, patientName: localStorage.getItem("fullName"),
+        specialty: formAppointment.specialty, appointmentDate: formattedDate,
         trieuChungLamSang: formAppointment.reason,
       }
       const resRecord = await fetch(`${BASE_URL}/visits`, { method: "POST", headers, body: JSON.stringify(payloadData) })
@@ -321,8 +309,8 @@ export default function PatientDashboard() {
   const handleStatCardClick = (filterType) => {
     setActiveStatFilter(filterType); setTab("info")
     setTimeout(() => {
-      const element = document.getElementById("medical-history-section")
-      if (element) element.scrollIntoView({ behavior: "smooth" })
+      const el = document.getElementById("medical-history-section")
+      if (el) el.scrollIntoView({ behavior: "smooth" })
     }, 100)
   }
 
@@ -340,7 +328,6 @@ export default function PatientDashboard() {
     </div>
   )
 
-  // ✅ Thêm tab Hóa đơn
   const TABS = [
     { key: "info",    label: "📄 Thông tin & Lịch sử" },
     { key: "register",label: "📅 Đăng ký khám" },
@@ -359,9 +346,7 @@ export default function PatientDashboard() {
         <div style={{ fontWeight: 700, fontSize: 18 }}>🏥 VNmedID — Bệnh nhân</div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 14 }}>👤 {fullName}</span>
-          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: WHITE, padding: "6px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
-            Đăng xuất
-          </button>
+          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: WHITE, padding: "6px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Đăng xuất</button>
         </div>
       </div>
 
@@ -374,9 +359,9 @@ export default function PatientDashboard() {
         {/* Thống kê */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
           {[
-            { id: "luotKham", icon: "📋", label: "Lượt đã khám",   value: loadingHistory ? "..." : completedList.length },
-            { id: "choKham",  icon: "⏳", label: "Đang chờ khám",  value: loadingHistory ? "..." : pendingList.length },
-            { id: "donThuoc", icon: "💊", label: "Có đơn thuốc",   value: loadingHistory ? "..." : completedList.filter(r => r.huongDieuTri).length },
+            { id: "luotKham", icon: "📋", label: "Lượt đã khám",  value: loadingHistory ? "..." : completedList.length },
+            { id: "choKham",  icon: "⏳", label: "Đang chờ khám", value: loadingHistory ? "..." : pendingList.length },
+            { id: "donThuoc", icon: "💊", label: "Có đơn thuốc",  value: loadingHistory ? "..." : completedList.filter(r => r.huongDieuTri).length },
           ].map(card => {
             const isSelected = activeStatFilter === card.id
             return (
@@ -402,23 +387,13 @@ export default function PatientDashboard() {
                 fontSize: 14, fontWeight: tab === key ? 600 : 400,
                 color: tab === key ? PRIMARY : GRAY_TEXT,
                 borderBottom: tab === key ? `2px solid ${PRIMARY}` : "2px solid transparent",
-              }}>
-                {label}
-              </button>
+              }}>{label}</button>
             ))}
           </div>
 
           <div style={{ padding: "24px" }}>
-            {saveSuccess && (
-              <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>
-                ✅ {saveSuccess}
-              </div>
-            )}
-            {error && (
-              <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>
-                ❌ {error}
-              </div>
-            )}
+            {saveSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>✅ {saveSuccess}</div>}
+            {error && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>❌ {error}</div>}
 
             {/* ===== TAB: THÔNG TIN ===== */}
             {tab === "info" && (
@@ -433,7 +408,6 @@ export default function PatientDashboard() {
                     <Field label="CCCD" value={patient?.citizenId} />
                     <Field label="Địa chỉ" value={patient?.address} />
                   </div>
-
                   <h4 style={{ color: PRIMARY }}>Hồ sơ sức khỏe</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
                     <Field label="Nhóm máu" value={patient?.nhomMau} />
@@ -458,7 +432,6 @@ export default function PatientDashboard() {
                         </button>
                       )}
                     </div>
-
                     {loadingHistory ? (
                       <div style={{ fontSize: 13, color: GRAY_TEXT }}>Đang đồng bộ bệnh án...</div>
                     ) : historyList.length === 0 ? (
@@ -522,9 +495,7 @@ export default function PatientDashboard() {
                 <form onSubmit={handleBookAppointment}>
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Chọn Chuyên Khoa Phù Hợp</label>
-                    <select value={formAppointment.specialty}
-                      onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))}
-                      style={inputStyle}>
+                    <select value={formAppointment.specialty} onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))} style={inputStyle}>
                       <option value="Nội khoa">Nội khoa tổng quát</option>
                       <option value="Ngoại khoa">Ngoại khoa chuyên sâu</option>
                       <option value="Nhi khoa">Nhi khoa (Trẻ em)</option>
@@ -546,8 +517,7 @@ export default function PatientDashboard() {
                   </div>
                   <div style={{ marginBottom: 24 }}>
                     <label style={labelStyle}>Lý do khám / Triệu chứng lâm sàng</label>
-                    <textarea value={formAppointment.reason}
-                      onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))}
+                    <textarea value={formAppointment.reason} onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))}
                       placeholder="VD: Đau đầu dai dẳng, sốt nhẹ về chiều..." rows={4}
                       style={{ ...inputStyle, resize: "vertical" }} required />
                   </div>
@@ -556,13 +526,8 @@ export default function PatientDashboard() {
                       padding: "11px 28px", borderRadius: 8, border: "none",
                       background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`,
                       color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer"
-                    }}>
-                      {saving ? "Đang xử lý..." : "📅 Xác nhận đăng ký"}
-                    </button>
-                    <button type="button" onClick={() => setTab("info")} style={{
-                      padding: "11px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`,
-                      background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT
-                    }}>Hủy bỏ</button>
+                    }}>{saving ? "Đang xử lý..." : "📅 Xác nhận đăng ký"}</button>
+                    <button type="button" onClick={() => setTab("info")} style={{ padding: "11px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`, background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT }}>Hủy bỏ</button>
                   </div>
                 </form>
               </div>
@@ -576,30 +541,30 @@ export default function PatientDashboard() {
                   <button onClick={loadInvoices} disabled={loadingInvoice} style={{
                     background: PRIMARY_LIGHT, color: PRIMARY_MED, border: `1px solid ${PRIMARY_MED}`,
                     padding: "6px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600
-                  }}>
-                    {loadingInvoice ? "Đang tải..." : "🔄 Làm mới"}
-                  </button>
+                  }}>{loadingInvoice ? "Đang tải..." : "🔄 Làm mới"}</button>
                 </div>
 
-                {/* Thông báo */}
-                {invoiceError && (
-                  <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>
-                    ❌ {invoiceError}
-                  </div>
-                )}
-                {invoiceSuccess && (
-                  <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, wordBreak: "break-all" }}>
-                    {invoiceSuccess}
+                {invoiceError && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>❌ {invoiceError}</div>}
+                {invoiceSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, wordBreak: "break-all" }}>{invoiceSuccess}</div>}
+
+                {/* Tx đang pending — link etherscan */}
+                {txPending && (
+                  <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#92400E" }}>
+                    🔗 Theo dõi giao dịch:{" "}
+                    <a href={`https://sepolia.etherscan.io/tx/${txPending}`} target="_blank" rel="noreferrer"
+                      style={{ color: "#1D4ED8", fontWeight: 600 }}>
+                      {txPending.slice(0, 20)}... (Etherscan)
+                    </a>
                   </div>
                 )}
 
                 {/* Hướng dẫn */}
                 <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "14px 18px", marginBottom: 20, fontSize: 13, color: "#1E40AF" }}>
-                  <strong>ℹ️ Hướng dẫn thanh toán:</strong> Bấm "Thanh toán bằng MetaMask" → Xác nhận giao dịch trên ví → Hệ thống sẽ tự động xác nhận sau khi blockchain confirm.
-                  Đảm bảo ví MetaMask đang kết nối mạng <strong>Sepolia Testnet</strong> và có đủ SepoliaETH.
+                  <strong>ℹ️ Hướng dẫn:</strong> Bấm "Thanh toán bằng MetaMask" → Xác nhận giao dịch → Chờ Sepolia confirm (~30 giây).
+                  Cần ví MetaMask trên mạng <strong>Sepolia Testnet</strong> và có <strong>SepoliaETH</strong>{" "}
+                  (<a href="https://faucet.sepolia.dev" target="_blank" rel="noreferrer" style={{ color: "#1D4ED8" }}>nhận tại đây</a>).
                 </div>
 
-                {/* Danh sách hóa đơn */}
                 {loadingInvoice ? (
                   <div style={{ textAlign: "center", padding: 40, color: GRAY_TEXT }}>Đang tải hóa đơn...</div>
                 ) : invoiceList.length === 0 ? (
@@ -639,7 +604,6 @@ export default function PatientDashboard() {
                           </div>
 
                           <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 10 }}>
-                            {/* Badge trạng thái */}
                             <span style={{
                               fontSize: 13, padding: "4px 14px", borderRadius: 20, fontWeight: 600,
                               background: invoice.paymentStatus === "paid" ? "#D1FAE5" : invoice.paymentStatus === "failed" ? "#FEE2E2" : "#FEF3C7",
@@ -648,7 +612,6 @@ export default function PatientDashboard() {
                               {invoice.paymentStatus === "paid" ? "✅ Đã thanh toán" : invoice.paymentStatus === "failed" ? "❌ Thất bại" : "⏳ Chờ thanh toán"}
                             </span>
 
-                            {/* Nút thanh toán */}
                             {invoice.paymentStatus !== "paid" && (
                               <button
                                 onClick={() => handlePayWithMetaMask(invoice)}
@@ -688,16 +651,14 @@ export default function PatientDashboard() {
             {tab === "edit" && (
               <div style={{ maxWidth: 600 }}>
                 {[
-                  { label: "Họ tên",         field: "fullName", type: "text" },
-                  { label: "Ngày sinh",       field: "dob",      type: "date" },
-                  { label: "Số điện thoại",   field: "phone",    type: "text" },
-                  { label: "Địa chỉ",         field: "address",  type: "text" },
+                  { label: "Họ tên", field: "fullName", type: "text" },
+                  { label: "Ngày sinh", field: "dob", type: "date" },
+                  { label: "Số điện thoại", field: "phone", type: "text" },
+                  { label: "Địa chỉ", field: "address", type: "text" },
                 ].map(({ label, field, type }) => (
                   <div key={field} style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>{label}</label>
-                    <input type={type} value={formBasic[field]}
-                      onChange={e => setFormBasic(p => ({ ...p, [field]: e.target.value }))}
-                      style={inputStyle} />
+                    <input type={type} value={formBasic[field]} onChange={e => setFormBasic(p => ({ ...p, [field]: e.target.value }))} style={inputStyle} />
                   </div>
                 ))}
                 <div style={{ marginBottom: 16 }}>
@@ -709,11 +670,7 @@ export default function PatientDashboard() {
                   </select>
                 </div>
                 <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={handleSaveBasic} disabled={saving} style={{
-                    padding: "10px 24px", borderRadius: 8, border: "none",
-                    background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`,
-                    color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer"
-                  }}>
+                  <button onClick={handleSaveBasic} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`, color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
                     {saving ? "Đang lưu..." : "💾 Lưu thay đổi"}
                   </button>
                   <button onClick={() => setTab("info")} style={{ padding: "10px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`, background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT }}>Huỷ</button>
@@ -725,26 +682,20 @@ export default function PatientDashboard() {
             {tab === "health" && (
               <div style={{ maxWidth: 600 }}>
                 {[
-                  { label: "Nhóm máu",             field: "nhomMau",    placeholder: "A, B, AB, O..." },
-                  { label: "Tiền sử bệnh",          field: "tienSuBenh", placeholder: "VD: Tiểu đường, cao huyết áp..." },
-                  { label: "Dị ứng",                field: "diUng",      placeholder: "VD: Penicillin, hải sản..." },
-                  { label: "Triệu chứng nền lâu dài",field: "trieuChung",placeholder: "Mô tả triệu chứng..." },
-                  { label: "Ghi chú thêm",          field: "ghiChu",     placeholder: "Ghi chú thêm..." },
+                  { label: "Nhóm máu", field: "nhomMau", placeholder: "A, B, AB, O..." },
+                  { label: "Tiền sử bệnh", field: "tienSuBenh", placeholder: "VD: Tiểu đường, cao huyết áp..." },
+                  { label: "Dị ứng", field: "diUng", placeholder: "VD: Penicillin, hải sản..." },
+                  { label: "Triệu chứng nền lâu dài", field: "trieuChung", placeholder: "Mô tả triệu chứng..." },
+                  { label: "Ghi chú thêm", field: "ghiChu", placeholder: "Ghi chú thêm..." },
                 ].map(({ label, field, placeholder }) => (
                   <div key={field} style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>{label}</label>
-                    <textarea value={formHealth[field]}
-                      onChange={e => setFormHealth(p => ({ ...p, [field]: e.target.value }))}
-                      placeholder={placeholder} rows={2}
-                      style={{ ...inputStyle, resize: "vertical" }} />
+                    <textarea value={formHealth[field]} onChange={e => setFormHealth(p => ({ ...p, [field]: e.target.value }))}
+                      placeholder={placeholder} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
                   </div>
                 ))}
                 <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={handleSaveHealth} disabled={saving} style={{
-                    padding: "10px 24px", borderRadius: 8, border: "none",
-                    background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`,
-                    color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer"
-                  }}>
+                  <button onClick={handleSaveHealth} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`, color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
                     {saving ? "Đang lưu..." : "💾 Lưu hồ sơ sức khỏe"}
                   </button>
                   <button onClick={() => setTab("info")} style={{ padding: "10px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`, background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT }}>Huỷ</button>
