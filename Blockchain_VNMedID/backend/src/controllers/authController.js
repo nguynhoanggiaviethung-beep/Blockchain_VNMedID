@@ -122,7 +122,7 @@ const registerPatient = async (req, res) => {
         );
       }
     
-    } catch (error) {
+    } catch (blockchainError) {
       console.error("Lỗi khi đăng ký người dùng trên blockchain:", blockchainError.message
       );
 
@@ -205,9 +205,11 @@ const saveWallet = async (req, res) => {
   try {
     const userRegistry = getContractInstance("userRegistry");
     let role = 1;
-    if (user.role === "doctor") role = 2;
+    if (user.role === "doctor") {
+      role = 2;
     }
-    if (user.role === "admin") role = 3;
+    if (user.role === "admin") {
+      role = 3;
     }
     
     const tx = await userRegistry.registerUser(
@@ -224,7 +226,9 @@ const saveWallet = async (req, res) => {
     );
 
   } catch (err) {
-    console.error( "❌ UserRegistry Error:", err.message); 
+    console.error( "❌ UserRegistry Error:",
+      err.message
+    ); 
   }
 
     await db.collection("patients").updateOne(
