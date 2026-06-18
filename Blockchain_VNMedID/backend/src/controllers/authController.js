@@ -1,6 +1,8 @@
+const { getContractInstance } = require("../config/web3");
 const mongoose = require("mongoose");
 const jwt = require("jsonwebtoken");
 const bcrypt = require("bcrypt");
+
 
 const register = async (req, res) => {
   try {
@@ -111,6 +113,21 @@ const registerPatient = async (req, res) => {
       createdAt: new Date(), updatedAt: new Date(),
     });
 
+    try {
+      if (walletAddress) {
+        const userRegistry = getContractInstance("userRegistry");
+        await userRegistry.registerUser(walletAddress, commonId.toString(), 1); // 1 = patient
+        console.log(
+          "Đăng ký người dùng trên blockchain thành công"
+        );
+      }
+    
+    } catch (error) {
+      console.error("Lỗi khi đăng ký người dùng trên blockchain:", blockchainError.message
+      );
+
+    }
+
     return res.status(201).json({
       success: true,
       message: "Đăng ký tài khoản bệnh nhân thành công!",
@@ -182,6 +199,33 @@ const saveWallet = async (req, res) => {
       { _id: userId },
       { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
     );
+    const user = await db.collection("users").findOne({
+      _id: userId
+  });
+  try {
+    const userRegistry = getContractInstance("userRegistry");
+    let role = 1;
+    if (user.role === "doctor") role = 2;
+    }
+    if (user.role === "admin") role = 3;
+    }
+    
+    const tx = await userRegistry.registerUser(
+      walletAddress,
+      userId.toString(),
+      role
+    );
+
+    await tx.wait();
+
+    console.log(
+      "✅ UserRegistry TX:",
+      tx.hash,
+    );
+
+  } catch (err) {
+    console.error( "❌ UserRegistry Error:", err.message); 
+  }
 
     await db.collection("patients").updateOne(
       { _id: userId },
