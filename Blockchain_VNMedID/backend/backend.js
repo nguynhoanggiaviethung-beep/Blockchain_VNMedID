@@ -15,12 +15,23 @@ process.env.JWT_SECRET = JWT_SECRET;
 // 1. KHỞI TẠO APP TRƯỚC
 const app = express();
 
-// 2. MIDDLEWARE HỆ THỐNG (Bây giờ app đã tồn tại nên không còn lỗi)
-app.use(cors({
-  origin: '*',
+// 2. MIDDLEWARE CORS — FIX: dùng function origin thay vì '*' để tránh lỗi preflight trên Railway
+const corsOptions = {
+  origin: function (origin, callback) {
+    // Cho phép request không có origin (Postman, curl, server-to-server)
+    if (!origin) return callback(null, true);
+    // Cho phép tất cả origin (linh hoạt khi domain frontend đổi)
+    return callback(null, true);
+  },
   methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization'],
-}));
+  credentials: true,
+};
+
+app.use(cors(corsOptions));
+// Xử lý preflight OPTIONS request rõ ràng cho mọi route
+app.options('*', cors(corsOptions));
+
 app.use(express.json());
 
 // 3. MIDDLEWARE DEBUG LOG
