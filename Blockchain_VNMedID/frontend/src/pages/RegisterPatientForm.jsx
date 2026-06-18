@@ -12,19 +12,87 @@ const RegisterPatientForm = () => {
   const [statusMessage, setStatusMessage] = useState('');
   const [statusType, setStatusType] = useState('');
   const [registering, setRegistering] = useState(false);
+  const [cccdImage, setCccdImage] = useState(null);
+  const [verifying, setVerifying] = useState(false);
+  const [verified, setVerified] = useState(false);
 
   const handleChange = (e) => {
     setPatientData({ ...patientData, [e.target.name]: e.target.value });
   };
+  const handleCCCDUpload = async (e) => {
+    const file = e.target.files[0];
 
+    if (!file) return;
+
+    setCccdImage(file);
+
+    const formData = new FormData();
+
+    formData.append("image", file);
+
+    try {
+      setVerifying(true);
+
+      const response = await axios.post(
+        "https://blockchainvnmedid-production.up.railway.app/api/v1/ekyc/verify-cccd",
+        formData,
+        {
+          headers: {
+            "Content-Type": "multipart/form-data"
+          }
+        }
+      );
+
+      const cccd = response.data.data.data[0];
+
+      setPatientData(prev => ({
+        ...prev,
+
+        fullName: cccd.name || "",
+
+        citizenId: cccd.id || "",
+
+        dob: convertDate(cccd.dob),
+
+        gender: 
+        cccd.sex === "NAM" ? "Nam"
+        : cccd.sex === "NỮ" ? "Nữ"
+        : "",
+
+        address: cccd.address || ""
+      }));
+
+      setVerified(true);
+
+    } catch (err) {
+
+      alert("Không thể xác thực CCCD");
+
+    } finally {
+
+      setVerifying(false);
+
+    }
+  };
+  const convertDate = (dateStr) => {
+    if (!dateStr) return "";
+    const [day, month, year] = dateStr.split("/");
+    return `${year}-${month}-${day}`;
+  };
   const handleSubmit = async (e) => {
     e.preventDefault();
+
+    if (!verified) {
+      alert("Vui lòng xác thực CCCD trước khi đăng ký");
+      return;
+    }
+    
     setRegistering(true);
     setStatusMessage('');
     try {
       const response = await axios.post(
-        'https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient',
-        patientData
+        "https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient",
+        { ...patientData, isVerified: verified }
       );
       if (response.data.success) {
         setStatusMessage('🎉 Đăng ký thành công! Vui lòng đăng nhập để tiếp tục.');
@@ -75,6 +143,35 @@ const RegisterPatientForm = () => {
       <p style={{ textAlign: 'center', color: '#5F6B7A', fontSize: 14, marginBottom: 20 }}>
         Điền thông tin cá nhân để tạo tài khoản
       </p>
+      <div
+        style={{
+          border: "1px dashed #CBD5E1",
+          borderRadius: 10,
+          padding: 16,
+          marginBottom: 16,
+          textAlign: "center"
+        }}
+      >
+        <label style={labelStyle}>
+          Ảnh CCCD/CMND (mặt trước)
+        </label>
+        <input
+          type="file"
+          accept="image/*"
+          onChange={handleCCCDUpload}
+          style={{ marginTop: 8 }}
+        />
+        {verifying && (
+          <div style={{ marginTop: 10 }}>
+            ⏳ Đang xác thực CCCD...
+          </div>
+        )}
+        {verified && (
+          <div style={{ marginTop: 10, color: '#16A34A', fontWeight: 600 }}>
+            ✅ Xác thực thành công!
+          </div>
+        )}
+      </div>
 
       {statusMessage && statusType === 'error' && (
         <div style={{
@@ -90,23 +187,23 @@ const RegisterPatientForm = () => {
         <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 12 }}>
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Họ và tên *</label>
-            <input type="text" name="fullName" placeholder="Nguyễn Văn A" onChange={handleChange} required style={inputStyle} />
+            <input type="text" name="fullName" value={patientData.fullName} placeholder="Nguyễn Văn A" onChange={handleChange} required style={inputStyle} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Email *</label>
-            <input type="email" name="email" placeholder="abc@gmail.com" onChange={handleChange} required style={inputStyle} />
+            <input type="email" name="email" value={patientData.email} placeholder="abc@gmail.com" onChange={handleChange} required style={inputStyle} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Mật khẩu *</label>
-            <input type="password" name="password" placeholder="Tối thiểu 6 ký tự" onChange={handleChange} required style={inputStyle} />
+            <input type="password" name="password" value={patientData.password} placeholder="Tối thiểu 6 ký tự" onChange={handleChange} required style={inputStyle} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Ngày sinh *</label>
-            <input type="date" name="dob" onChange={handleChange} required style={{ ...inputStyle, colorScheme: 'light' }} />
+            <input type="date" name="dob" value={patientData.dob} onChange={handleChange} required style={{ ...inputStyle, colorScheme: 'light' }} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Giới tính *</label>
-            <select name="gender" onChange={handleChange} required defaultValue="" style={inputStyle}>
+            <select name="gender" value={patientData.gender} onChange={handleChange} required style={inputStyle}>
               <option value="" disabled>-- Chọn --</option>
               <option value="Nam">Nam</option>
               <option value="Nữ">Nữ</option>
@@ -115,15 +212,15 @@ const RegisterPatientForm = () => {
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Số điện thoại *</label>
-            <input type="tel" name="phone" placeholder="0912 345 678" onChange={handleChange} required style={inputStyle} />
+            <input type="tel" name="phone" value={patientData.phone} placeholder="0912 345 678" onChange={handleChange} required style={inputStyle} />
           </div>
           <div style={{ display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Số CCCD *</label>
-            <input type="text" name="citizenId" placeholder="012345678901" onChange={handleChange} required style={inputStyle} />
+            <input type="text" name="citizenId" value={patientData.citizenId} placeholder="012345678901" onChange={handleChange} required style={inputStyle} />
           </div>
           <div style={{ gridColumn: '1 / -1', display: 'flex', flexDirection: 'column' }}>
             <label style={labelStyle}>Địa chỉ</label>
-            <input type="text" name="address" placeholder="Số nhà, tên đường, tỉnh/TP" onChange={handleChange} style={inputStyle} />
+            <input type="text" name="address" value={patientData.address} placeholder="Số nhà, tên đường, tỉnh/TP" onChange={handleChange} style={inputStyle} />
           </div>
         </div>
 

@@ -12,6 +12,26 @@ const patientSchema = new mongoose.Schema({
   diUng:      { type: String, default: '' },
   trieuChung: { type: String, default: '' },
   ghiChu:     { type: String, default: '' },
+  isVerified: {
+    type: Boolean,
+    default: false
+  },
+
+  bhytCode: {
+    type: String,
+    default: ''
+  },
+
+  hasInsurance: {
+    type: Boolean,
+    default: false
+  },
+
+  cccdVerifiedAt: {
+    type: Date,
+    default: null
+  }
+  
 }, { timestamps: true });
 
 module.exports = mongoose.model('Patient', patientSchema);

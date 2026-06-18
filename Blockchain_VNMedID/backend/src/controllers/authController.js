@@ -78,7 +78,7 @@ const login = async (req, res) => {
 
 const registerPatient = async (req, res) => {
   try {
-    const { email, password, fullName, dob, gender, phone, address, citizenId, walletAddress } = req.body;
+    const { email, password, fullName, dob, gender, phone, address, citizenId, walletAddress, isVerified } = req.body;
 
     if (!email || !password || !fullName || !citizenId) {
       return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ thông tin bắt buộc!" });
@@ -105,6 +105,8 @@ const registerPatient = async (req, res) => {
     await db.collection("patients").insertOne({
       _id: commonId, fullName, dob, gender,
       phone, address, citizenId,
+      isVerified: isVerified || false,
+      cccdVerifiedAt: isVerified ? new Date() : null,
       walletAddress: walletAddress || null,
       createdAt: new Date(), updatedAt: new Date(),
     });
