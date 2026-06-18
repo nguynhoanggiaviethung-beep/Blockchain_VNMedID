@@ -30,7 +30,7 @@ const corsOptions = {
 
 app.use(cors(corsOptions));
 // Xử lý preflight OPTIONS request rõ ràng cho mọi route
-app.options('*', cors(corsOptions));
+app.use(cors(corsOptions));
 
 app.use(express.json());
 
