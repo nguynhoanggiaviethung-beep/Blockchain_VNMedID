@@ -1,3 +1,4 @@
+const { getOnChainRecord } = require('../controllers/medicalRecordController');
 const express = require('express');
 const router = express.Router();
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
@@ -22,6 +23,7 @@ router.get('/doctor/pending', xacThucToken, phanQuyen('doctor'), getDoctorPendin
 router.get('/doctor/completed-list', xacThucToken, phanQuyen('doctor'), getDoctorCompletedList);
 router.get('/doctor/completed', xacThucToken, phanQuyen('doctor'), getDoctorCompletedCount);
 router.get('/pending', getPendingRecords);
+router.get('/on-chain/:patientAddress', getOnChainRecord);
 
 router.get('/:id', xacThucToken, phanQuyen('admin', 'doctor', 'patient'), getRecordById);
 router.put('/:id', xacThucToken, phanQuyen('doctor'), updateRecordByDoctor);

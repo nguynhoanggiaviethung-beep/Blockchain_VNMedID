@@ -262,6 +262,54 @@ const completeVisit = async (req, res) => {
     }
 };
 
+// ========================================================
+// 🔍 CHỨC NĂNG MỚI: GỌI HÀM getPatientRecord TỪ SMART CONTRACT
+// ========================================================
+const getOnChainRecord = async (req, res) => {
+    try {
+        const { patientAddress } = req.params;
+
+        if (!patientAddress) {
+            return res.status(400).json({ success: false, message: "Thiếu địa chỉ ví bệnh nhân!" });
+        }
+
+        // 1. Khởi tạo instance kết nối tới Smart Contract MedicalRecord
+        const medicalContract = getContractInstance('medicalRecord');
+
+        // 2. Gọi hàm getPatientRecord trong file .sol (trả về tuple 4 thành phần)
+        const result = await medicalContract.getPatientRecord(patientAddress);
+
+        const fetchedPatient = result[0];
+        const hospitalAddress = result[1];
+        const recordHashes = result[2];
+        const timestamps = result[3];
+
+        // 3. Tiến hành map mảng song song giữa hash và timestamp
+        const historyList = recordHashes.map((hash, index) => {
+            const dateObj = new Date(Number(timestamps[index]) * 1000);
+            return {
+                stt: index + 1,
+                hash: hash,
+                time: dateObj.toLocaleString('vi-VN') // Định dạng ngày tháng VN đọc được
+            };
+        });
+
+        // 4. Trả dữ liệu cấu trúc mảng hoàn chỉnh về cho Frontend
+        return res.status(200).json({
+            success: true,
+            data: {
+                patientAddress: fetchedPatient,
+                hospitalAddress: hospitalAddress,
+                history: historyList
+            }
+        });
+
+    } catch (error) {
+        console.error("❌ Lỗi khi thực thi hàm getPatientRecord:", error.message);
+        return res.status(500).json({ success: false, message: "Lỗi truy vấn dữ liệu Blockchain", error: error.message });
+    }
+};
+
 const getRecordById = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: "Lấy chi tiết bệnh án thành công" });
@@ -309,6 +357,7 @@ module.exports = {
     getDoctorCompletedList,
     getDoctorCompletedCount,
     completeVisit,
+    getOnChainRecord, // ✅ Đừng quên export hàm mới này ra nhé!
     getRecordById,
     updateRecordByDoctor,
     getPatientHistory

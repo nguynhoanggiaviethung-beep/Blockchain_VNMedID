@@ -4,6 +4,7 @@ import { DatePicker } from 'antd';
 import locale from 'antd/es/date-picker/locale/vi_VN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
+import axios from 'axios'; // Đảm bảo đã install axios (npm i axios)
 
 dayjs.locale('vi');
 
@@ -21,20 +22,12 @@ const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF"
 
 // ✅ Hàm encode calldata payInvoice(string) thủ công — chuẩn ABI encoding
 function encodePayInvoice(invoiceId) {
-  // Function selector: keccak256("payInvoice(string)") = 0x7c9495b2
   const selector = "7c9495b2"
-
-  // Encode string theo ABI:
-  // - offset (32 bytes): vị trí bắt đầu data = 0x20 = 32
-  // - length (32 bytes): độ dài chuỗi
-  // - data (padded to 32 bytes)
   const strBytes = Array.from(new TextEncoder().encode(invoiceId))
   const offset = "0000000000000000000000000000000000000000000000000000000000000020"
   const length = strBytes.length.toString(16).padStart(64, "0")
   const strHex = strBytes.map(b => b.toString(16).padStart(2, "0")).join("")
-  // Pad to multiple of 32 bytes
   const paddedStr = strHex.padEnd(Math.ceil(strHex.length / 64) * 64, "0")
-
   return "0x" + selector + offset + length + paddedStr
 }
 
@@ -54,6 +47,11 @@ export default function PatientDashboard() {
   const [historyList, setHistoryList] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(true)
   const [activeStatFilter, setActiveStatFilter] = useState("all")
+
+  // 🚀 CÁC STATE BỔ SUNG CHO BLOCKCHAIN ON-CHAIN HISTORY
+  const [blockchainData, setBlockchainData] = useState(null);
+  const [loadingBlockchain, setLoadingBlockchain] = useState(false);
+  const [blockchainError, setBlockchainError] = useState("");
 
   // State hóa đơn
   const [invoiceList, setInvoiceList] = useState([])
@@ -78,6 +76,24 @@ export default function PatientDashboard() {
     "Authorization": `Bearer ${token}`
   }
 
+  // 🚀 Hàm bốc lịch sử On-chain từ Backend Railway về dựa vào Ví/Address của bệnh nhân
+  const loadBlockchainRecords = async (patientAddress) => {
+    if (!patientAddress) return;
+    setLoadingBlockchain(true);
+    setBlockchainError("");
+    try {
+      const res = await axios.get(`${BASE_URL}/medical-records/on-chain/${patientAddress}`);
+      if (res.data.success) {
+        setBlockchainData(res.data.data);
+      }
+    } catch (err) {
+      console.error("Lỗi lấy dữ liệu Blockchain:", err);
+      setBlockchainError("Không thể kết nối mạng Sepolia để đồng bộ mã Hash.");
+    } finally {
+      setLoadingBlockchain(false);
+    }
+  };
+
   useEffect(() => {
     const load = async () => {
       try {
@@ -94,6 +110,11 @@ export default function PatientDashboard() {
             nhomMau: d.nhomMau || "", tienSuBenh: d.tienSuBenh || "",
             diUng: d.diUng || "", trieuChung: d.trieuChung || "", ghiChu: d.ghiChu || "",
           })
+
+          // 👉 Khi đã bốc được dữ liệu bệnh nhân và có walletAddress, tiến hành gọi hàm On-chain luôn
+          if (d.walletAddress) {
+            loadBlockchainRecords(d.walletAddress);
+          }
         }
       } catch (err) { console.log("Lỗi tải thông tin:", err) }
       finally { setLoading(false) }
@@ -128,7 +149,6 @@ export default function PatientDashboard() {
     if (tab === "invoice") loadInvoices()
   }, [tab])
 
-  // ✅ Hàm thanh toán MetaMask — dùng encodePayInvoice chuẩn
   const handlePayWithMetaMask = async (invoice) => {
     setInvoiceError("")
     setInvoiceSuccess("")
@@ -141,12 +161,9 @@ export default function PatientDashboard() {
 
     try {
       setPayingId(invoice.invoiceId)
-
-      // 1. Kết nối MetaMask
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" })
       const walletAddress = accounts[0]
 
-      // 2. Kiểm tra đúng mạng Sepolia
       const chainId = await window.ethereum.request({ method: "eth_chainId" })
       if (chainId !== "0xaa36a7") {
         try {
@@ -155,7 +172,6 @@ export default function PatientDashboard() {
             params: [{ chainId: "0xaa36a7" }]
           })
         } catch (switchErr) {
-          // Nếu chưa có mạng Sepolia thì thêm vào
           if (switchErr.code === 4902) {
             await window.ethereum.request({
               method: "wallet_addEthereumChain",
@@ -171,15 +187,10 @@ export default function PatientDashboard() {
         }
       }
 
-      // 3. Tính amount Wei từ ETH
-      // invoice.amount là số ETH (ví dụ 0.001)
       const amountWei = BigInt(Math.round(invoice.amount * 1e18))
       const amountHex = "0x" + amountWei.toString(16)
-
-      // 4. Encode calldata payInvoice(invoiceId)
       const calldata = encodePayInvoice(invoice.invoiceId)
 
-      // 5. Gửi transaction qua MetaMask
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{
@@ -187,14 +198,13 @@ export default function PatientDashboard() {
           to: PAYMENT_CONTRACT_ADDRESS,
           value: amountHex,
           data: calldata,
-          gas: "0x493E0", // 300000 gas
+          gas: "0x493E0", 
         }]
       })
 
       setTxPending(txHash)
       setInvoiceSuccess(`⏳ Giao dịch đã gửi! Đang chờ xác nhận trên Sepolia...`)
 
-      // 6. Poll chờ receipt (3s x 40 lần = 2 phút)
       let confirmed = false
       let receipt = null
       for (let i = 0; i < 40; i++) {
@@ -222,7 +232,6 @@ export default function PatientDashboard() {
 
       setInvoiceSuccess(`✅ Blockchain đã xác nhận! Đang cập nhật hệ thống...`)
 
-      // 7. Gọi backend xác nhận + lưu txHash
       const res = await fetch(`${BASE_URL}/invoices/payments`, {
         method: "POST",
         headers,
@@ -329,11 +338,11 @@ export default function PatientDashboard() {
   )
 
   const TABS = [
-    { key: "info",    label: "📄 Thông tin & Lịch sử" },
-    { key: "register",label: "📅 Đăng ký khám" },
-    { key: "invoice", label: "💳 Hóa đơn & Thanh toán" },
-    { key: "edit",    label: "✏️ Cập nhật" },
-    { key: "health",  label: "🏥 Sức khỏe" },
+    { key: "info",     label: "📄 Thông tin & Lịch sử" },
+    { key: "register", label: "📅 Đăng ký khám" },
+    { key: "invoice",  label: "💳 Hóa đơn & Thanh toán" },
+    { key: "edit",     label: "✏️ Cập nhật" },
+    { key: "health",   label: "🏥 Sức khỏe" },
   ]
 
   const completedList = historyList.filter(r => r.status === "completed")
@@ -407,23 +416,26 @@ export default function PatientDashboard() {
                     <Field label="Số điện thoại" value={patient?.phone} />
                     <Field label="CCCD" value={patient?.citizenId} />
                     <Field label="Địa chỉ" value={patient?.address} />
+                    <Field label="Địa chỉ ví công khai (Web3 Address)" value={patient?.walletAddress} />
                   </div>
+                  
                   <h4 style={{ color: PRIMARY }}>Hồ sơ sức khỏe</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
                     <Field label="Nhóm máu" value={patient?.nhomMau} />
                     <Field label="Dị ứng" value={patient?.diUng} />
                     <Field label="Tiền sử bệnh" value={patient?.tienSuBenh} />
                     <Field label="Triệu chứng lâm sàng ban đầu" value={patient?.trieuChungLamSang} />
-                    <Field label="Ghi chú hệ thống" value={patient?.ghiChu} />
+                    <Field label="Ghi chu hệ thống" value={patient?.ghiChu} />
                   </div>
 
+                  {/* Lịch sử khám bệnh thường (Web2) */}
                   <div id="medical-history-section" style={{ borderTop: `1px solid ${BORDER}`, paddingTop: "20px" }}>
                     <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
                       <h4 style={{ color: PRIMARY, margin: 0 }}>
                         {activeStatFilter === "luotKham" && "📋 Lịch sử các ca đã khám"}
                         {activeStatFilter === "choKham"  && "⏳ Lịch hẹn đang chờ khám"}
                         {activeStatFilter === "donThuoc" && "💊 Đơn thuốc điện tử"}
-                        {activeStatFilter === "all"      && "📜 Toàn bộ lịch sử khám bệnh"}
+                        {activeStatFilter === "all"      && "📜 Toàn bộ lịch sử khám bệnh (MongoDB)"}
                       </h4>
                       {activeStatFilter !== "all" && (
                         <button onClick={() => setActiveStatFilter("all")}
@@ -439,7 +451,7 @@ export default function PatientDashboard() {
                         Bạn chưa có lịch khám nào trên hệ thống VNmedID.
                       </div>
                     ) : (
-                      <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 16, marginBottom: 32 }}>
                         {historyList.filter(record => {
                           if (activeStatFilter === "luotKham") return record.status === "completed"
                           if (activeStatFilter === "choKham")  return record.status === "pending"
@@ -484,12 +496,63 @@ export default function PatientDashboard() {
                       </div>
                     )}
                   </div>
+
+                  {/* 🚀 COMPONENT BẢNG XÁC THỰC HỒ SƠ BỆNH ÁN ON-CHAIN (BLOCKCHAIN) */}
+                  <div style={{ borderTop: `2px dashed ${BORDER}`, paddingTop: "24px", marginTop: "16px" }}>
+                    <h4 style={{ color: "#16A34A", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 8 }}>
+                      🔗 🛡️ DANH SÁCH BỆNH ÁN XÁC THỰC ON-CHAIN (SMART CONTRACT)
+                    </h4>
+                    <p style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 0, marginBottom: 16 }}>
+                      Dữ liệu lịch sử băm bất biến được tải thời gian thực trực tiếp từ hàm <code>getPatientRecord</code> trên mạng thử nghiệm Sepolia.
+                    </p>
+
+                    {loadingBlockchain ? (
+                      <div style={{ fontSize: 13, color: "#16A34A", fontWeight: 500 }}>🔄 Đang đọc dữ liệu thời gian thực từ Smart Contract Sepolia...</div>
+                    ) : blockchainError ? (
+                      <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "12px", fontSize: 13 }}>⚠️ {blockchainError}</div>
+                    ) : !blockchainData || blockchainData.history.length === 0 ? (
+                      <div style={{ background: "#F8FAFC", padding: "16px", borderRadius: 8, color: GRAY_TEXT, fontSize: 13, fontStyle: "italic", border: `1px solid ${BORDER}` }}>
+                        ℹ️ Địa chỉ ví này chưa được khởi tạo lịch sử bệnh án nào trên Smart Contract.
+                      </div>
+                    ) : (
+                      <div style={{ background: WHITE, borderRadius: 10, padding: "16px", border: "1px solid #BBF7D0", boxShadow: "0 4px 12px rgba(22,163,74,0.05)" }}>
+                        <div style={{ fontSize: 13, marginBottom: 12, display: "flex", flexDirection: "column", gap: 4 }}>
+                          <div><strong>Bệnh nhân (Patient Address):</strong> <code style={{ background: "#F3F4F6", padding: "2px 6px", borderRadius: 4 }}>{blockchainData.patientAddress}</code></div>
+                          <div><strong>Cơ sở y tế phụ trách (Hospital):</strong> <code style={{ background: "#F3F4F6", padding: "2px 6px", borderRadius: 4 }}>{blockchainData.hospitalAddress}</code></div>
+                        </div>
+
+                        <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 8 }}>
+                          <thead>
+                            <tr style={{ background: "#16A34A", color: WHITE, textAlign: "left" }}>
+                              <th style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>STT</th>
+                              <th style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>Mốc thời gian (Block Timestamp)</th>
+                              <th style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>Mã Hash bệnh án bất biến (Record Hash)</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {blockchainData.history.map((item) => (
+                              <tr key={item.stt} style={{ borderBottom: "1px solid #E5E7EB" }}>
+                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB", fontWeight: "bold" }}>{item.stt}</td>
+                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB", color: "#4B5563" }}>{item.time}</td>
+                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>
+                                  <code style={{ color: "#D946EF", background: "#FDF4FF", padding: "2px 6px", borderRadius: 4, wordBreak: "break-all", fontWeight: 600 }}>
+                                    {item.hash}
+                                  </code>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    )}
+                  </div>
                 </>
               )
             )}
 
             {/* ===== TAB: ĐĂNG KÝ KHÁM ===== */}
             {tab === "register" && (
+              // Giữ nguyên phần UI Đăng ký khám của bạn...
               <div style={{ maxWidth: 600 }}>
                 <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>Đặt lịch hẹn khám trực tuyến</h4>
                 <form onSubmit={handleBookAppointment}>
@@ -547,18 +610,15 @@ export default function PatientDashboard() {
                 {invoiceError && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>❌ {invoiceError}</div>}
                 {invoiceSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, wordBreak: "break-all" }}>{invoiceSuccess}</div>}
 
-                {/* Tx đang pending — link etherscan */}
                 {txPending && (
                   <div style={{ background: "#FFFBEB", border: "1px solid #FDE68A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, color: "#92400E" }}>
                     🔗 Theo dõi giao dịch:{" "}
-                    <a href={`https://sepolia.etherscan.io/tx/${txPending}`} target="_blank" rel="noreferrer"
-                      style={{ color: "#1D4ED8", fontWeight: 600 }}>
+                    <a href={`https://sepolia.etherscan.io/tx/${txPending}`} target="_blank" rel="noreferrer" style={{ color: "#1D4ED8", fontWeight: 600 }}>
                       {txPending.slice(0, 20)}... (Etherscan)
                     </a>
                   </div>
                 )}
 
-                {/* Hướng dẫn */}
                 <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 10, padding: "14px 18px", marginBottom: 20, fontSize: 13, color: "#1E40AF" }}>
                   <strong>ℹ️ Hướng dẫn:</strong> Bấm "Thanh toán bằng MetaMask" → Xác nhận giao dịch → Chờ Sepolia confirm (~30 giây).
                   Cần ví MetaMask trên mạng <strong>Sepolia Testnet</strong> và có <strong>SepoliaETH</strong>{" "}
@@ -592,8 +652,7 @@ export default function PatientDashboard() {
                             {invoice.txHash && (
                               <div style={{ fontSize: 12, color: GRAY_TEXT, marginTop: 4 }}>
                                 🔗 TxHash:{" "}
-                                <a href={`https://sepolia.etherscan.io/tx/${invoice.txHash}`} target="_blank" rel="noreferrer"
-                                  style={{ color: PRIMARY_MED, textDecoration: "none", wordBreak: "break-all" }}>
+                                <a href={`https://sepolia.etherscan.io/tx/${invoice.txHash}`} target="_blank" rel="noreferrer" style={{ color: PRIMARY_MED, textDecoration: "none", wordBreak: "break-all" }}>
                                   {invoice.txHash.slice(0, 30)}...
                                 </a>
                               </div>
@@ -609,34 +668,14 @@ export default function PatientDashboard() {
                               background: invoice.paymentStatus === "paid" ? "#D1FAE5" : invoice.paymentStatus === "failed" ? "#FEE2E2" : "#FEF3C7",
                               color: invoice.paymentStatus === "paid" ? "#065F46" : invoice.paymentStatus === "failed" ? "#991B1B" : "#D97706"
                             }}>
-                              {invoice.paymentStatus === "paid" ? "✅ Đã thanh toán" : invoice.paymentStatus === "failed" ? "❌ Thất bại" : "⏳ Chờ thanh toán"}
+                              {invoice.paymentStatus === "paid" ? "✅ Đã thanh toán" : "⚠️ Chưa thanh toán"}
                             </span>
-
                             {invoice.paymentStatus !== "paid" && (
-                              <button
-                                onClick={() => handlePayWithMetaMask(invoice)}
-                                disabled={payingId === invoice.invoiceId}
-                                style={{
-                                  display: "flex", alignItems: "center", gap: 8,
-                                  background: payingId === invoice.invoiceId ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`,
-                                  color: WHITE, border: "none", padding: "10px 20px", borderRadius: 8,
-                                  cursor: payingId === invoice.invoiceId ? "not-allowed" : "pointer",
-                                  fontSize: 14, fontWeight: 600, boxShadow: "0 2px 8px rgba(10,45,110,0.3)"
-                                }}
-                              >
-                                <svg width="18" height="18" viewBox="0 0 35 33" fill="none">
-                                  <path d="M32.958 1L19.41 10.692l2.519-5.937L32.958 1z" fill="#E2761B"/>
-                                  <path d="M2.025 1l13.435 9.784-2.4-5.937L2.025 1z" fill="#E4761B"/>
-                                </svg>
-                                {payingId === invoice.invoiceId ? "Đang xử lý..." : "Thanh toán bằng MetaMask"}
+                              <button onClick={() => handlePayWithMetaMask(invoice)} disabled={payingId === invoice.invoiceId} style={{
+                                padding: "8px 16px", background: PRIMARY, color: WHITE, border: "none", borderRadius: 8, fontSize: 13, fontWeight: 600, cursor: "pointer"
+                              }}>
+                                {payingId === invoice.invoiceId ? "⏳ Đang xử lý..." : "🦊 MetaMask Pay"}
                               </button>
-                            )}
-
-                            {invoice.paymentStatus === "paid" && (
-                              <a href={`https://sepolia.etherscan.io/tx/${invoice.txHash}`} target="_blank" rel="noreferrer"
-                                style={{ fontSize: 13, color: PRIMARY_MED, textDecoration: "none", fontWeight: 600 }}>
-                                🔍 Xem trên Etherscan
-                              </a>
                             )}
                           </div>
                         </div>
@@ -647,61 +686,50 @@ export default function PatientDashboard() {
               </div>
             )}
 
-            {/* ===== TAB: CẬP NHẬT ===== */}
+            {/* ===== TAB: CẬP NHẬT THÔNG TIN ===== */}
             {tab === "edit" && (
               <div style={{ maxWidth: 600 }}>
-                {[
-                  { label: "Họ tên", field: "fullName", type: "text" },
-                  { label: "Ngày sinh", field: "dob", type: "date" },
-                  { label: "Số điện thoại", field: "phone", type: "text" },
-                  { label: "Địa chỉ", field: "address", type: "text" },
-                ].map(({ label, field, type }) => (
-                  <div key={field} style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>{label}</label>
-                    <input type={type} value={formBasic[field]} onChange={e => setFormBasic(p => ({ ...p, [field]: e.target.value }))} style={inputStyle} />
-                  </div>
-                ))}
-                <div style={{ marginBottom: 16 }}>
-                  <label style={labelStyle}>Giới tính</label>
-                  <select value={formBasic.gender} onChange={e => setFormBasic(p => ({ ...p, gender: e.target.value }))} style={inputStyle}>
-                    <option value="">-- Chọn --</option>
-                    <option value="Male">Nam</option>
-                    <option value="Female">Nữ</option>
-                  </select>
+                <h4 style={{ color: PRIMARY, marginTop: 0 }}>Sửa thông tin cá nhân</h4>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Họ và tên</label>
+                  <input type="text" value={formBasic.fullName} onChange={e => setFormBasic(p => ({ ...p, fullName: e.target.value }))} style={inputStyle} />
                 </div>
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={handleSaveBasic} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`, color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
-                    {saving ? "Đang lưu..." : "💾 Lưu thay đổi"}
-                  </button>
-                  <button onClick={() => setTab("info")} style={{ padding: "10px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`, background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT }}>Huỷ</button>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Số điện thoại</label>
+                  <input type="text" value={formBasic.phone} onChange={e => setFormBasic(p => ({ ...p, phone: e.target.value }))} style={inputStyle} />
                 </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={labelStyle}>Địa chỉ cư trú</label>
+                  <input type="text" value={formBasic.address} onChange={e => setFormBasic(p => ({ ...p, address: e.target.value }))} style={inputStyle} />
+                </div>
+                <button onClick={handleSaveBasic} disabled={saving} style={{ padding: "10px 24px", background: PRIMARY, color: WHITE, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  {saving ? "Đang lưu..." : "💾 Lưu thay đổi"}
+                </button>
               </div>
             )}
 
             {/* ===== TAB: SỨC KHỎE ===== */}
             {tab === "health" && (
               <div style={{ maxWidth: 600 }}>
-                {[
-                  { label: "Nhóm máu", field: "nhomMau", placeholder: "A, B, AB, O..." },
-                  { label: "Tiền sử bệnh", field: "tienSuBenh", placeholder: "VD: Tiểu đường, cao huyết áp..." },
-                  { label: "Dị ứng", field: "diUng", placeholder: "VD: Penicillin, hải sản..." },
-                  { label: "Triệu chứng nền lâu dài", field: "trieuChung", placeholder: "Mô tả triệu chứng..." },
-                  { label: "Ghi chú thêm", field: "ghiChu", placeholder: "Ghi chú thêm..." },
-                ].map(({ label, field, placeholder }) => (
-                  <div key={field} style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>{label}</label>
-                    <textarea value={formHealth[field]} onChange={e => setFormHealth(p => ({ ...p, [field]: e.target.value }))}
-                      placeholder={placeholder} rows={2} style={{ ...inputStyle, resize: "vertical" }} />
-                  </div>
-                ))}
-                <div style={{ display: "flex", gap: 12 }}>
-                  <button onClick={handleSaveHealth} disabled={saving} style={{ padding: "10px 24px", borderRadius: 8, border: "none", background: saving ? "#93B8E8" : `linear-gradient(90deg, ${PRIMARY} 0%, ${PRIMARY_MED} 100%)`, color: WHITE, fontSize: 14, fontWeight: 600, cursor: saving ? "not-allowed" : "pointer" }}>
-                    {saving ? "Đang lưu..." : "💾 Lưu hồ sơ sức khỏe"}
-                  </button>
-                  <button onClick={() => setTab("info")} style={{ padding: "10px 24px", borderRadius: 8, border: `1.5px solid ${BORDER}`, background: WHITE, fontSize: 14, cursor: "pointer", color: GRAY_TEXT }}>Huỷ</button>
+                <h4 style={{ color: PRIMARY, marginTop: 0 }}>Cập nhật hồ sơ sức khỏe tự khai</h4>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Nhóm máu</label>
+                  <input type="text" value={formHealth.nhomMau} onChange={e => setFormHealth(p => ({ ...p, nhomMau: e.target.value }))} style={inputStyle} placeholder="VD: O+, A+, AB-..." />
                 </div>
+                <div style={{ marginBottom: 14 }}>
+                  <label style={labelStyle}>Dị ứng (Thuốc, thức ăn)</label>
+                  <input type="text" value={formHealth.diUng} onChange={e => setFormHealth(p => ({ ...p, diUng: e.target.value }))} style={inputStyle} placeholder="VD: Dị ứng Penicillin, hải sản..." />
+                </div>
+                <div style={{ marginBottom: 20 }}>
+                  <label style={labelStyle}>Tiền sử bệnh án gia đình / Bản thân</label>
+                  <textarea value={formHealth.tienSuBenh} onChange={e => setFormHealth(p => ({ ...p, tienSuBenh: e.target.value }))} style={inputStyle} rows={3} placeholder="VD: Cao huyết áp, tiểu đường tuýp 2..." />
+                </div>
+                <button onClick={handleSaveHealth} disabled={saving} style={{ padding: "10px 24px", background: PRIMARY, color: WHITE, border: "none", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  {saving ? "Đang cập nhật..." : "🏥 Cập nhật hồ sơ"}
+                </button>
               </div>
             )}
+
           </div>
         </div>
       </div>
