@@ -1,6 +1,6 @@
 const MedicalRecord = require('../models/MedicalRecord'); 
 const Visit = require('../models/Visit');
-const Invoice = require('../models/Invoice'); // ✅ Tự động import model hóa đơn
+const Invoice = require('../models/Invoice'); 
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
@@ -183,6 +183,8 @@ const completeVisit = async (req, res) => {
 
         const db = mongoose.connection.db;
         const visitObjectId = new mongoose.Types.ObjectId(recordId);
+        
+        // 1. Cập nhật hồ sơ Off-chain trong MongoDB
         await db.collection('visits').updateOne(
            { _id: visitObjectId },
             { $set: {
@@ -199,62 +201,73 @@ const completeVisit = async (req, res) => {
             return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
         }
 
+        // Lấy địa chỉ ví Blockchain chuẩn (0x...) của bệnh nhân từ database
+        let patientWalletAddress = null;
+        try {
+            let patientObjectId;
+            try { patientObjectId = new mongoose.Types.ObjectId(visit.patientId); } catch(_) {}
+            const patientUser = await db.collection('users').findOne({ 
+                $or: [{ _id: patientObjectId }, { _id: visit.patientId }] 
+            });
+            if (patientUser && patientUser.walletAddress) {
+                patientWalletAddress = patientUser.walletAddress;
+            }
+        } catch (error) {
+            console.error("Lỗi lấy ví bệnh nhân cho blockchain:", error.message);
+        }
+
+        // Sử dụng địa chỉ ví thật, nếu không có mới fall-back về ID
+        const targetAddress = patientWalletAddress || String(visit.patientId);
+
+        // 2. Đồng bộ mã băm (Hash) bệnh án lên Mạng Sepolia
         let recordTxHash = null;
         try {
             const recordContent = JSON.stringify({ recordId, diagnose, prescription, doctorName });
             const recordHash = ethers.keccak256(ethers.toUtf8Bytes(recordContent));
 
+            console.log(`[Blockchain] Tiến hành đẩy hash bệnh án lên ví: ${targetAddress}`);
             const medicalContract = getContractInstance('medicalRecord');
             const tx = await medicalContract.addRecordHash(
-                String(visit.patientId),
+                targetAddress,
                 "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586",
                 recordHash
             );
             await tx.wait();
             recordTxHash = tx.hash;
+            console.log(`[Blockchain] Đẩy lên thành công! TxHash: ${tx.hash}`);
         } catch (bcError) {
             console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
         }
 
-        // ========================================================
-        // 💳 TỰ ĐỘNG SINH HÓA ĐƠN KHI BÁC SĨ KHÁM XONG (ON-CHAIN & OFF-CHAIN)
-        // ========================================================
+        // 3. Tự động sinh hóa đơn viện phí (On-chain & Off-chain)
         try {
-            let patientObjectId;
-            try { patientObjectId = new mongoose.Types.ObjectId(visit.patientId); } catch(_) {}
-            
-            const patientUser = await db.collection('users').findOne({ 
-                $or: [{ _id: patientObjectId }, { _id: visit.patientId }] 
-            });
-
-            if (patientUser && patientUser.walletAddress) {
+            if (patientWalletAddress) {
                 const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
                 const defaultAmount = 0.002; 
 
-                // 1. Lưu hóa đơn vào MongoDB
+                // Lưu hóa đơn vào MongoDB
                 const autoInvoice = new Invoice({
                     invoiceId: generatedInvoiceId,
                     amount: defaultAmount,
-                    patientWallet: patientUser.walletAddress,
+                    patientWallet: patientWalletAddress,
                     paymentStatus: 'pending',
                     createdAt: new Date()
                 });
                 await autoInvoice.save();
 
-                // 2. Lưu hóa đơn lên Smart Contract Payment Sepolia
+                // Lưu hóa đơn lên Smart Contract Payment Sepolia
                 const paymentContract = getContractInstance('payment');
                 const amountWei = ethers.parseEther(defaultAmount.toString());
-                const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
+                const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientWalletAddress, amountWei);
                 await paymentTx.wait();
                 
-                console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientUser.walletAddress}`);
+                console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientWalletAddress}`);
             } else {
                 console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
             }
         } catch (invoiceError) {
             console.error('❌ Lỗi tự động sinh hóa đơn:', invoiceError.message);
         }
-        // ========================================================
 
         return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit, recordTxHash });
     } catch (error) {
@@ -262,9 +275,6 @@ const completeVisit = async (req, res) => {
     }
 };
 
-// ========================================================
-// 🔍 CHỨC NĂNG MỚI: GỌI HÀM getPatientRecord TỪ SMART CONTRACT
-// ========================================================
 const getOnChainRecord = async (req, res) => {
     try {
         const { patientAddress } = req.params;
@@ -273,13 +283,11 @@ const getOnChainRecord = async (req, res) => {
             return res.status(400).json({ success: false, message: "Thiếu địa chỉ ví bệnh nhân!" });
         }
 
-        // 1. Khởi tạo instance kết nối tới Smart Contract MedicalRecord
         const medicalContract = getContractInstance('medicalRecord');
         let result;
         try {
             result = await medicalContract.getPatientRecord(patientAddress);
         } catch (contractError) {
-
             console.warn(`⚠️ Ví bệnh nhân ${patientAddress} chưa có bệnh án On-chain:`, contractError.message);
             return res.status(200).json({
                 success: true,
@@ -296,17 +304,15 @@ const getOnChainRecord = async (req, res) => {
         const recordHashes = result[2];
         const timestamps = result[3];
 
-        // 3. Tiến hành map mảng song song giữa hash và timestamp
         const historyList = recordHashes.map((hash, index) => {
             const dateObj = new Date(Number(timestamps[index]) * 1000);
             return {
                 stt: index + 1,
                 hash: hash,
-                time: dateObj.toLocaleString('vi-VN') // Định dạng ngày tháng VN đọc được
+                time: dateObj.toLocaleString('vi-VN')
             };
         });
 
-        // 4. Trả dữ liệu cấu trúc mảng hoàn chỉnh về cho Frontend
         return res.status(200).json({
             success: true,
             data: {
@@ -369,7 +375,7 @@ module.exports = {
     getDoctorCompletedList,
     getDoctorCompletedCount,
     completeVisit,
-    getOnChainRecord, // ✅ Đừng quên export hàm mới này ra nhé!
+    getOnChainRecord, 
     getRecordById,
     updateRecordByDoctor,
     getPatientHistory
