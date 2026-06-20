@@ -7,10 +7,17 @@ const SPECIALTIES = [
   "Mắt", "Răng hàm mặt", "Thần kinh", "Xương khớp",
 ];
 
+// ✅ DANH SÁCH BỆNH VIỆN CHO BỆNH NHÂN LỰA CHỌN TRÙNG KHỚP KỊCH BẢN BACKEND
+const HOSPITALS = [
+  "Bệnh viện Chợ Rẫy",
+  "Bệnh viện Đại học Y Dược"
+];
+
 export default function PatientBookingForm({ onBookingSuccess }) {
   const [specialty, setSpecialty]   = useState('');
   const [appointmentDate, setDate]  = useState('');
   const [trieuChung, setTrieuChung] = useState('');
+  const [hospitalName, setHospitalName] = useState(''); // ✅ Thêm state lưu bệnh viện được chọn
   const [loading, setLoading]       = useState(false);
   const [message, setMessage]       = useState('');
 
@@ -32,15 +39,17 @@ export default function PatientBookingForm({ onBookingSuccess }) {
           specialty,
           appointmentDate,
           trieuChungLamSang: trieuChung,
+          hospitalName, // ✅ THÊM: Đẩy tên bệnh viện lên API Backend
         },
         { headers: { Authorization: `Bearer ${token}` } }
       );
 
       if (response.data.success) {
-        setMessage('🎉 Đăng ký khám thành công! Chờ admin phân công bác sĩ.');
+        setMessage('🎉 Đăng ký khám thành công! Chờ hệ thống tự động phân phối về bệnh viện.');
         setSpecialty('');
         setDate('');
         setTrieuChung('');
+        setHospitalName(''); // Reset bộ chọn bệnh viện
         if (onBookingSuccess) onBookingSuccess();
       }
     } catch (error) {
@@ -59,6 +68,20 @@ export default function PatientBookingForm({ onBookingSuccess }) {
       </h3>
 
       <form onSubmit={handleBooking} style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+
+        {/* ✅ THÊM MỚI: Bộ chọn Cơ sở Bệnh viện khám */}
+        <div>
+          <label style={labelStyle}>Cơ sở Bệnh viện khám <span style={{ color: 'red' }}>*</span></label>
+          <select 
+            value={hospitalName} 
+            onChange={(e) => setHospitalName(e.target.value)} 
+            required 
+            style={inputStyle}
+          >
+            <option value="">-- Chọn bệnh viện tiếp nhận --</option>
+            {HOSPITALS.map(h => <option key={h} value={h}>{h}</option>)}
+          </select>
+        </div>
 
         {/* Chuyên khoa */}
         <div>
