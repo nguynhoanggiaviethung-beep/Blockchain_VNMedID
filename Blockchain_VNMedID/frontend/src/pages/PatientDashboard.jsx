@@ -93,7 +93,8 @@ export default function PatientDashboard() {
       }
     } catch (err) {
       console.error("Lỗi lấy dữ liệu Blockchain:", err);
-      setBlockchainError("Không thể kết nối mạng Sepolia để đồng bộ mã Hash.");
+      const apiErrorMessage = err.response?.data?.message || err.message;
+      setBlockchainError(`Lỗi đồng bộ Blockchain: ${apiErrorMessage}`);
     } finally {
       setLoadingBlockchain(false);
     }
