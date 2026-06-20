@@ -179,7 +179,6 @@ const completeVisit = async (req, res) => {
         const diagnose = chanDoanChuyenMon;
         const prescription = huongDieuTri;
 
-
         if (!recordId || !diagnose || !prescription) {
             return res.status(400).json({ success: false, message: "Thiếu thông tin bệnh án!" });
         }
@@ -219,8 +218,8 @@ const completeVisit = async (req, res) => {
             console.error("Lỗi lấy ví bệnh nhân cho blockchain:", error.message);
         }
 
-        // Sử dụng địa chỉ ví thật, nếu không có mới fall-back về ID
-        const targetAddress = patientWalletAddress || String(visit.patientId);
+        // Định danh duy nhất để map bệnh án: Dùng ID bệnh nhân của MongoDB (String) theo đúng format struct Solidity của bạn
+        const targetPatientKey = String(visit.patientId);
 
         // 2. Đồng bộ mã băm (Hash) bệnh án lên Mạng Sepolia
         let recordTxHash = null;
@@ -228,11 +227,13 @@ const completeVisit = async (req, res) => {
             const recordContent = JSON.stringify({ recordId, diagnose, prescription, doctorName });
             const recordHash = ethers.keccak256(ethers.toUtf8Bytes(recordContent));
 
-            console.log(`[Blockchain] Tiến hành đẩy hash bệnh án lên ví: ${targetAddress}`);
+            console.log(`[Blockchain] Tiến hành đẩy hash bệnh án lên Key: ${targetPatientKey}`);
             const medicalContract = getContractInstance('medicalRecord');
+            
+            // Hàm Smart Contract yêu cầu: addRecordHash(string patientId, address doctorWallet, string recordHash)
             const tx = await medicalContract.addRecordHash(
-                targetAddress,
-                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586",
+                targetPatientKey,
+                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Địa chỉ ví bác sĩ / bệnh viện mặc định
                 recordHash
             );
             await tx.wait();
@@ -283,15 +284,17 @@ const getOnChainRecord = async (req, res) => {
         const { patientAddress } = req.params;
 
         if (!patientAddress) {
-            return res.status(400).json({ success: false, message: "Thiếu địa chỉ ví bệnh nhân!" });
+            return res.status(400).json({ success: false, message: "Thiếu mã định danh hoặc địa chỉ ví bệnh nhân!" });
         }
 
         const medicalContract = getContractInstance('medicalRecord');
-        let result;
+        let records = [];
+
         try {
-            result = await medicalContract.getPatientRecord(patientAddress);
+            // Gọi chính xác hàm getPatientRecord(string) từ file .sol
+            records = await medicalContract.getPatientRecord(patientAddress);
         } catch (contractError) {
-            console.warn(`⚠️ Ví bệnh nhân ${patientAddress} chưa có bệnh án On-chain:`, contractError.message);
+            console.warn(`⚠️ Bệnh nhân ${patientAddress} chưa có hồ sơ On-chain hoặc lỗi gọi hàm:`, contractError.message);
             return res.status(200).json({
                 success: true,
                 data: {
@@ -299,19 +302,21 @@ const getOnChainRecord = async (req, res) => {
                     hospitalAddress: "0x0000000000000000000000000000000000000000",
                     history: []
                 }
-            });    
+            });
         }
 
-        const fetchedPatient = result[0];
-        const hospitalAddress = result[1];
-        const recordHashes = result[2];
-        const timestamps = result[3];
+        // Map mảng Struct PatientRecord[] từ Solidity sang mảng JSON object cho Frontend
+        const historyList = records.map((record, index) => {
+            // Trích xuất an toàn dữ liệu từ Struct object Solidity
+            const hashValue = record.recordHash || record[0];
+            const doctorWallet = record.doctorWallet || record[1];
+            const timestamp = record.createdAt ? Number(record.createdAt) : Number(record[2]);
 
-        const historyList = recordHashes.map((hash, index) => {
-            const dateObj = new Date(Number(timestamps[index]) * 1000);
+            const dateObj = new Date(timestamp * 1000);
             return {
                 stt: index + 1,
-                hash: hash,
+                hash: hashValue,
+                doctorWallet: doctorWallet,
                 time: dateObj.toLocaleString('vi-VN')
             };
         });
@@ -319,8 +324,8 @@ const getOnChainRecord = async (req, res) => {
         return res.status(200).json({
             success: true,
             data: {
-                patientAddress: fetchedPatient,
-                hospitalAddress: hospitalAddress,
+                patientAddress: patientAddress,
+                hospitalAddress: "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Mock địa chỉ bệnh viện xử lý ca bệnh
                 history: historyList
             }
         });
