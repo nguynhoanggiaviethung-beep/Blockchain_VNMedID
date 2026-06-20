@@ -30,6 +30,8 @@ contract AccessControl {
     }
 
     constructor(address registryAddress) {
+        require(registryAddress != address(0), "Registry empty");
+
         admin = msg.sender;
         userRegistry = IUserRegistryForAccess(registryAddress);
     }
@@ -37,10 +39,9 @@ contract AccessControl {
     function grantAccess(string calldata patientId, address doctorWallet) external onlyAdmin {
         require(bytes(patientId).length > 0, "Patient empty");
         require(doctorWallet != address(0), "Doctor empty");
-        require(
-            userRegistry.isAuthorizedRole(doctorWallet, ROLE_DOCTOR),
-            "Not doctor"
-        );
+
+        bool isDoctor = userRegistry.isAuthorizedRole(doctorWallet, ROLE_DOCTOR);
+        require(isDoctor, "Not doctor");
 
         canAccess[patientId][doctorWallet] = true;
 
@@ -92,7 +93,10 @@ contract AccessControl {
             uint256 time
         )
     {
+        require(index < logs.length, "Index wrong");
+
         AccessLog memory logItem = logs[index];
+
         return (
             logItem.patientId,
             logItem.doctorWallet,

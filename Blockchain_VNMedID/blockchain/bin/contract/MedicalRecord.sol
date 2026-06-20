@@ -12,25 +12,23 @@ contract MedicalRecord {
     address public admin;
     IAccessControlForRecord public accessControl;
 
-    struct RecordInfo {
-        string patientId;
-        address doctorWallet;
+    struct PatientRecord {
         string recordHash;
-        uint256 time;
+        address doctorWallet;
+        uint256 createdAt;
     }
 
-    mapping(string => string[]) private patientRecordHashes;
-    RecordInfo[] private records;
+    mapping(string => PatientRecord[]) private patientRecords;
 
     event RecordHashAdded(
         string patientId,
         address doctorWallet,
         string recordHash,
-        uint256 time
+        uint256 createdAt
     );
 
     modifier onlyAdmin() {
-        require(msg.sender == admin, "Only admin");
+        require(msg.sender == admin, "Only admin can do this");
         _;
     }
 
@@ -44,21 +42,20 @@ contract MedicalRecord {
         address doctorWallet,
         string calldata recordHash
     ) external onlyAdmin {
-        require(bytes(patientId).length > 0, "Patient empty");
-        require(bytes(recordHash).length > 0, "Hash empty");
-        require(
-            accessControl.checkAccess(patientId, doctorWallet),
-            "No access"
-        );
+        require(bytes(patientId).length > 0, "Patient id is empty");
+        require(doctorWallet != address(0), "Doctor wallet is empty");
+        require(bytes(recordHash).length > 0, "Record hash is empty");
 
-        patientRecordHashes[patientId].push(recordHash);
+        bool hasAccess = accessControl.checkAccess(patientId, doctorWallet);
+        require(hasAccess == true, "Doctor has no access");
 
-        records.push(RecordInfo(
-            patientId,
-            doctorWallet,
-            recordHash,
-            block.timestamp
-        ));
+        PatientRecord memory newRecord = PatientRecord({
+            recordHash: recordHash,
+            doctorWallet: doctorWallet,
+            createdAt: block.timestamp
+        });
+
+        patientRecords[patientId].push(newRecord);
 
         emit RecordHashAdded(
             patientId,
@@ -68,15 +65,39 @@ contract MedicalRecord {
         );
     }
 
-    function getRecordHashes(string calldata patientId)
+    function getPatientRecord(string calldata patientId)
         external
         view
-        returns (string[] memory)
+        returns (PatientRecord[] memory)
     {
-        return patientRecordHashes[patientId];
+        return patientRecords[patientId];
     }
 
-    function getRecordCount() external view returns (uint256) {
-        return records.length;
+    function getRecordCount(string calldata patientId)
+        external
+        view
+        returns (uint256)
+    {
+        return patientRecords[patientId].length;
+    }
+
+    function getRecordByIndex(string calldata patientId, uint256 index)
+        external
+        view
+        returns (
+            string memory recordHash,
+            address doctorWallet,
+            uint256 createdAt
+        )
+    {
+        require(index < patientRecords[patientId].length, "Index is wrong");
+
+        PatientRecord memory recordItem = patientRecords[patientId][index];
+
+        return (
+            recordItem.recordHash,
+            recordItem.doctorWallet,
+            recordItem.createdAt
+        );
     }
 }
