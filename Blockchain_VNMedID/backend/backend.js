@@ -76,6 +76,7 @@ app.use('/api/v1/medical-records', require('./src/routes/medicalRecordRoutes'));
 app.use('/api/v1/invoices', require('./src/routes/invoiceRoutes'));
 app.use('/api/v1/access', require('./src/routes/accessRoutes'));
 app.use('/api/v1/payments', require('./src/routes/paymentRoutes'));
+app.use('/api/v1/gov', require('./src/routes/govRoutes'))
 
 app.get("/", (req, res) => res.send("Backend VNmedID đang chạy!"));
 
