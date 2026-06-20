@@ -9,7 +9,8 @@ const doctorSchema = new mongoose.Schema({
   "Số điện thoại": { type: String, required: true },
   "Chuyên Khoa": { type: String, required: true }, 
   "Mã Bác sĩ": { type: String, required: true },
-  "Giấy phép hành nghề": { type: String, required: true } // Lưu String để giữ đủ 12 số 0
+  "Giấy phép hành nghề": { type: String, required: true },
+  "Tên Bệnh viện": { type: String, default: "Hệ thống Y tế số VNmedID" } // Lưu String để giữ đủ 12 số 0
 }, { timestamps: true });
 
 module.exports = mongoose.model('Doctor', doctorSchema);

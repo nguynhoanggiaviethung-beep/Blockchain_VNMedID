@@ -16,7 +16,8 @@ export default function DoctorDashboard() {
   const [doctorInfo, setDoctorInfo] = useState({
     fullName: localStorage.getItem("fullName") || "Bác sĩ hệ thống",
     specialty: localStorage.getItem("chuyenKhoa") || "Da liễu",
-    licenseNumber: localStorage.getItem("maBacSi") || "BS-123450"
+    licenseNumber: localStorage.getItem("maBacSi") || "BS-123450",
+    hospitalName: localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID" // <-- KHỞI TẠO TRƯỜNG BỆNH VIỆN
   })
 
   const [patientList, setPatientList] = useState([])
@@ -37,7 +38,7 @@ export default function DoctorDashboard() {
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
 
-  // ✅ Lấy danh sách bệnh nhân từ /visits (đúng endpoint)
+  // ✅ Lấy danh sách bệnh nhân từ /visits
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
       setLoading(true)
@@ -76,10 +77,18 @@ export default function DoctorDashboard() {
         if (res?.data?.success && res?.data?.data) {
           const d = res.data.data
           currentSpecialty = d?.specialty || d?.["Chuyên Khoa"] || currentSpecialty
+          
+          // Lấy tên bệnh viện từ API trả về (tự động fallback nếu chưa cập nhật database)
+          const hName = d?.["Tên Bệnh viện"] || d?.hospitalName || localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID"
+          
+          // Đồng bộ vào localStorage để lưu trạng thái phiên làm việc
+          localStorage.setItem("hospitalName", hName)
+
           setDoctorInfo({
             fullName: d?.fullName || d?.["Họ và tên"] || localStorage.getItem("fullName") || "Bác sĩ",
             specialty: currentSpecialty,
-            licenseNumber: d?.licenseNumber || d?.["Giấy phép hành nghề"] || "---"
+            licenseNumber: d?.licenseNumber || d?.["Giấy phép hành nghề"] || "---",
+            hospitalName: hName // <-- ĐỔI STATE ĐỘNG CHO TRANG DASHBOARD
           })
         }
       } catch {}
@@ -149,7 +158,6 @@ export default function DoctorDashboard() {
 
     setSubmitting(true)
     try {
-      // ✅ Gọi đúng endpoint /visits/:id để cập nhật trạng thái
       const response = await axiosOriginal.put(
         `${BASE_URL}/visits/${selectedPatient._id}`,
         {
@@ -158,6 +166,7 @@ export default function DoctorDashboard() {
           huongDieuTri: prescriptionText,
           doctorName: doctorInfo.fullName,
           doctorId: userId,
+          hospitalName: doctorInfo.hospitalName // <-- ĐẨY TÊN BỆNH VIỆN LÊN LỊCH SỬ KHÁM BỆNH ÁN
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -180,21 +189,32 @@ export default function DoctorDashboard() {
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F7FB", fontFamily: "'Segoe UI', Arial, sans-serif" }}>
-      {/* Header */}
+      {/* Header — Đã cập nhật hiển thị tên Bệnh viện động */}
       <div style={{ background: PRIMARY, color: "#fff", padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontWeight: 700, fontSize: 18 }}>🏥 VNmedID — Bác sĩ</div>
+        <div style={{ fontWeight: 700, fontSize: 18, display: "flex", alignItems: "center", gap: 10 }}>
+          <span>🏥 {doctorInfo.hospitalName}</span>
+          <span style={{ fontSize: 13, background: "rgba(255,255,255,0.2)", padding: "2px 10px", borderRadius: 4, fontWeight: 400 }}>Portal Bác sĩ</span>
+        </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 14 }}>🩺 Chào, {doctorInfo.fullName}</span>
+          <span style={{ fontSize: 14 }}>| 🩺 BS. {doctorInfo.fullName}</span>
           <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", padding: "6px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Đăng xuất</button>
         </div>
       </div>
 
       <div style={{ padding: "32px" }}>
-        <div style={{ marginBottom: 28 }}>
-          <h2 style={{ color: PRIMARY, margin: 0 }}>Xin chào, BS. {doctorInfo.fullName} 👋</h2>
-          <p style={{ color: GRAY_TEXT, marginTop: 4, fontSize: 14 }}>
-            Chuyên khoa: <span style={{ color: PRIMARY_MED, fontWeight: 600 }}>{doctorInfo.specialty}</span> · GP: <strong>{doctorInfo.licenseNumber}</strong>
-          </p>
+        {/* Khối xin chào — Thêm thẻ định danh Bệnh viện làm việc */}
+        <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+          <div>
+            <h2 style={{ color: PRIMARY, margin: 0 }}>Xin chào, BS. {doctorInfo.fullName} 👋</h2>
+            <p style={{ color: GRAY_TEXT, marginTop: 6, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
+              Chuyên khoa: <span style={{ color: PRIMARY_MED, fontWeight: 600 }}>{doctorInfo.specialty}</span> · GP: <strong>{doctorInfo.licenseNumber}</strong>
+            </p>
+          </div>
+          {/* Tag Thương hiệu Bệnh viện hiển thị độc lập cực đẹp khi chấm Đồ án */}
+          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 20px", textAlign: "right", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
+            <span style={{ fontSize: 12, color: GRAY_TEXT, display: "block" }}>Cơ sở làm việc hiện tại</span>
+            <strong style={{ color: PRIMARY_MED, fontSize: 15 }}>{doctorInfo.hospitalName}</strong>
+          </div>
         </div>
 
         {/* 3 Ô thống kê */}
@@ -368,7 +388,7 @@ export default function DoctorDashboard() {
                           padding: "6px 16px", borderRadius: 20, border: `2px solid ${drug.meals.includes(meal) ? PRIMARY_MED : BORDER}`,
                           background: drug.meals.includes(meal) ? PRIMARY_LIGHT : "#fff",
                           color: drug.meals.includes(meal) ? PRIMARY_MED : GRAY_TEXT, fontWeight: 600, fontSize: 13, cursor: "pointer"
-                        }}>{meal}</button>
+                        }}>{" " + meal}</button>
                       ))}
                     </div>
                   </div>

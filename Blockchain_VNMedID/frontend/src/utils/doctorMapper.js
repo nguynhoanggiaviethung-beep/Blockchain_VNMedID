@@ -14,7 +14,8 @@ export const mapBackendToFrontend = (backendData) => {
     phone: backendData["Số điện thoại"] || backendData.phone || "",
     specialty: backendData["Chuyên Khoa"] || backendData.specialty || "",
     doctorCode: backendData["Mã Bác sĩ"] || backendData.doctorCode || "",
-    licenseNumber: backendData["Giấy phép hành nghề"] || backendData.licenseNumber || ""
+    licenseNumber: backendData["Giấy phép hành nghề"] || backendData.licenseNumber || "",
+    hospitalName: backendData["Tên Bệnh viện"] || backendData.hospitalName || "Hệ thống Y tế số VNmedID" // Chuẩn 12 số mới
   };
 };
 
@@ -32,6 +33,7 @@ export const mapFrontendToBackend = (frontendData) => {
     "Số điện thoại": frontendData.phone,
     "Chuyên Khoa": frontendData.specialty,
     "Mã Bác sĩ": frontendData.doctorCode,
-    "Giấy phép hành nghề": frontendData.licenseNumber // Chuẩn 12 số mới
+    "Giấy phép hành nghề": frontendData.licenseNumber,
+    "Tên Bệnh viện": frontendData.hospitalName
   };
 };
