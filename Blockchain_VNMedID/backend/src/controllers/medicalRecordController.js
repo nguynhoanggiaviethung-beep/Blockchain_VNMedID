@@ -175,7 +175,10 @@ const getDoctorCompletedCount = async (req, res) => {
 
 const completeVisit = async (req, res) => {
     try {
-        const { recordId, diagnose, prescription, doctorName } = req.body;
+        const { recordId, chanDoanChuyenMon, huongDieuTri, doctorName } = req.body;
+        const diagnose = chanDoanChuyenMon;
+        const prescription = huongDieuTri;
+
 
         if (!recordId || !diagnose || !prescription) {
             return res.status(400).json({ success: false, message: "Thiếu thông tin bệnh án!" });
