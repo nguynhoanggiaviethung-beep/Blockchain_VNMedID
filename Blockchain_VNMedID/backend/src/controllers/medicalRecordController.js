@@ -275,9 +275,21 @@ const getOnChainRecord = async (req, res) => {
 
         // 1. Khởi tạo instance kết nối tới Smart Contract MedicalRecord
         const medicalContract = getContractInstance('medicalRecord');
+        let result;
+        try {
+            result = await medicalContract.getPatientRecord(patientAddress);
+        } catch (contractError) {
 
-        // 2. Gọi hàm getPatientRecord trong file .sol (trả về tuple 4 thành phần)
-        const result = await medicalContract.getPatientRecord(patientAddress);
+            console.warn(`⚠️ Ví bệnh nhân ${patientAddress} chưa có bệnh án On-chain:`, contractError.message);
+            return res.status(200).json({
+                success: true,
+                data: {
+                    patientAddress: patientAddress,
+                    hospitalAddress: "0x0000000000000000000000000000000000000000",
+                    history: []
+                }
+            });    
+        }
 
         const fetchedPatient = result[0];
         const hospitalAddress = result[1];
