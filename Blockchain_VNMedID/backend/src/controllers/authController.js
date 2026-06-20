@@ -6,7 +6,7 @@ const bcrypt = require("bcrypt");
 
 const register = async (req, res) => {
   try {
-    const { fullName, email, password, role, dob, gender, phone, specialty, licenseNumber } = req.body;
+    const { fullName, email, password, role, dob, gender, phone, specialty, licenseNumber, hospitalName } = req.body;
     const db = mongoose.connection.db;
 
     const existing = await db.collection("users").findOne({ email });
@@ -26,7 +26,7 @@ const register = async (req, res) => {
     if (role === "doctor") {
       await db.collection("doctors").insertOne({
         _id: commonId, fullName, email,
-        dob, gender, phone, specialty, licenseNumber,
+        dob, gender, phone, specialty, licenseNumber, hospitalName,
         createdAt: new Date(), updatedAt: new Date(),
       });
     }
