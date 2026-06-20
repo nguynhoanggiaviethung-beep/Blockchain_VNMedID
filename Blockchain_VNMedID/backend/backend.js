@@ -79,7 +79,8 @@ app.use('/api/v1/payments', require('./src/routes/paymentRoutes'));
 app.use('/api/v1/gov', require('./src/routes/govRoutes'))
 
 app.get("/", (req, res) => res.send("Backend VNmedID đang chạy!"));
-
+const { startRevokeExpiredAccessJob } = require('./src/cron/revokeExpiredAccess');
+   startRevokeExpiredAccessJob();
 // 6. KHỞI ĐỘNG SERVER
 connectDatabase()
   .then(() => {

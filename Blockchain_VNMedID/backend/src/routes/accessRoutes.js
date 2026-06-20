@@ -11,7 +11,10 @@ const { getAccessContract } = require('../utils/blockchain');
 
 // Import thư viện để verify signature và model lưu trữ yêu cầu
 const { ethers } = require('ethers');
-const AccessRequest = require('../models/AccessRequest'); // Đảm bảo đường dẫn tới Model ở bước trước chính xác
+const AccessRequest = require('../models/AccessRequest');
+
+// ✅ Thời hạn cấp quyền mỗi lần duyệt — 1 giờ (đổi số này nếu muốn thay đổi)
+const ACCESS_DURATION_MS = 60 * 60 * 1000; // 1 giờ = 60 phút * 60 giây * 1000ms
 
 // ─── ROUTES CƠ BẢN CÓ SẴN CỦA BẠN ──────────────────────────────────────────
 router.get('/profile', xacThucToken, (req, res) => {
@@ -42,9 +45,9 @@ router.post('/register-doctor', xacThucToken, phanQuyen('admin'), async (req, re
   }
 });
 
-// ─── ĐÃ CẬP NHẬT CHUẨN WEB2.5: ĐIỀU CHỈNH HOẶC BỔ SUNG ROUTES XIN QUYỀN ───
+// ─── FLOW XIN QUYỀN — BỆNH NHÂN DUYỆT — TỰ ĐỘNG HẾT HẠN ───────────────────
 
-// [BỔ SUNG] API 1: Bác sĩ gửi yêu cầu xin quyền (Web2)
+// API 1: Bác sĩ gửi yêu cầu xin quyền
 // POST /api/v1/access/requests/create
 router.post('/requests/create', xacThucToken, phanQuyen('doctor'), async (req, res) => {
   try {
@@ -52,11 +55,23 @@ router.post('/requests/create', xacThucToken, phanQuyen('doctor'), async (req, r
     if (!patientId || !patientWallet || !doctorWallet || !doctorName) {
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ thông tin yêu cầu!' });
     }
-    
+
     // Kiểm tra xem đã tồn tại yêu cầu tương tự đang ở trạng thái pending chưa
     const existing = await AccessRequest.findOne({ patientId, doctorWallet, status: 'pending' });
     if (existing) {
       return res.status(400).json({ success: false, message: 'Yêu cầu của bạn đang chờ bệnh nhân duyệt rồi!' });
+    }
+
+    // Kiểm tra xem đã có quyền đang còn hạn chưa (tránh xin trùng)
+    const activeGrant = await AccessRequest.findOne({
+      patientId, doctorWallet, status: 'approved',
+      expiresAt: { $gt: new Date() }
+    });
+    if (activeGrant) {
+      return res.status(400).json({
+        success: false,
+        message: `Bạn đang có quyền truy cập hồ sơ này đến ${activeGrant.expiresAt.toLocaleString('vi-VN')}!`
+      });
     }
 
     const newRequest = new AccessRequest({ patientId, patientWallet, doctorWallet, doctorName });
@@ -68,7 +83,7 @@ router.post('/requests/create', xacThucToken, phanQuyen('doctor'), async (req, r
   }
 });
 
-// [BỔ SUNG] API 2: Bệnh nhân lấy danh sách yêu cầu của chính họ
+// API 2: Bệnh nhân lấy danh sách yêu cầu của chính họ
 // GET /api/v1/access/requests/my
 router.get('/requests/my', xacThucToken, phanQuyen('patient'), async (req, res) => {
   try {
@@ -78,13 +93,13 @@ router.get('/requests/my', xacThucToken, phanQuyen('patient'), async (req, res) 
     }
 
     const list = await AccessRequest.find({ patientId }).sort({ createdAt: -1 });
-    return res.json({ success: true, data: list });
+    return res.json({ success: true, data: list, accessDurationMs: ACCESS_DURATION_MS });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 });
 
-// [BỔ SUNG] API 3: Bệnh nhân phê duyệt bằng cách ký Offline và gửi Signature lên cho Admin đẩy On-chain
+// API 3: Bệnh nhân phê duyệt bằng chữ ký off-chain → set thời hạn quyền
 // POST /api/v1/access/requests/:id/approve
 router.post('/requests/:id/approve', xacThucToken, phanQuyen('patient'), async (req, res) => {
   try {
@@ -94,44 +109,79 @@ router.post('/requests/:id/approve', xacThucToken, phanQuyen('patient'), async (
       return res.status(400).json({ success: false, message: 'Thiếu chữ ký xác thực signature!' });
     }
 
-    // 1. Tìm bản ghi yêu cầu tạm trong database
     const request = await AccessRequest.findById(requestId);
     if (!request || request.status !== 'pending') {
       return res.status(400).json({ success: false, message: 'Yêu cầu không tồn tại hoặc đã xử lý trước đó.' });
     }
 
-    // 2. Tạo lại thông điệp gốc khớp từng ký tự với chuỗi Text bên Frontend
     const message = `Toi dong y cap quyen cho bac si ${request.doctorWallet.toLowerCase()} xem ho so cua toi (${request.patientId})`;
-    
-    // 3. Giải mã chữ ký ngoại tuyến xem địa chỉ ví nào thực hiện hành động này
     const recoveredAddress = ethers.verifyMessage(message, signature);
 
-    // 4. Kiểm tra chéo xem chữ ký giải mã ra có đúng là ví của bệnh nhân này không
     if (recoveredAddress.toLowerCase() !== request.patientWallet.toLowerCase()) {
       return res.status(401).json({ success: false, message: 'Xác thực không hợp lệ! Chữ ký không trùng khớp với ví bệnh nhân.' });
     }
 
-    // 5. Chữ ký chuẩn chính chủ -> Sử dụng hàm tiện ích có sẵn của bạn để lấy thực thể Smart Contract
     const contract = getAccessContract();
-    
-    // Admin (Phía Server ký thay bằng Private Key) đẩy lệnh thực thi On-chain lên Sepolia
     const tx = await contract.grantAccess(request.patientId, request.doctorWallet);
-    await tx.wait(); // Chờ giao dịch hoàn tất trên mạng lưới
+    await tx.wait();
 
-    // 6. Ghi nhận dữ liệu cập nhật vào MongoDB
+    // ✅ Ghi nhận thời điểm duyệt và thời điểm hết hạn quyền
+    const now = new Date();
     request.status = 'approved';
     request.txHash = tx.hash;
+    request.approvedAt = now;
+    request.expiresAt = new Date(now.getTime() + ACCESS_DURATION_MS);
     await request.save();
 
-    return res.json({ success: true, message: 'Cấp quyền thành công lên Blockchain!', data: { txHash: tx.hash } });
+    return res.json({
+      success: true,
+      message: `Cấp quyền thành công! Quyền sẽ tự động hết hạn sau ${ACCESS_DURATION_MS / 60000} phút.`,
+      data: { txHash: tx.hash, expiresAt: request.expiresAt }
+    });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Lỗi Blockchain hoặc vai trò Bác sĩ chưa hợp lệ: ' + err.message });
   }
 });
 
-// ─── GIỮ NGUYÊN CÁC ROUTE TIỆN ÍCH BAN ĐẦU CỦA BẠN ───────────────────────
+// API 4: Bệnh nhân từ chối yêu cầu
+// POST /api/v1/access/requests/:id/reject
+router.post('/requests/:id/reject', xacThucToken, phanQuyen('patient'), async (req, res) => {
+  try {
+    const request = await AccessRequest.findById(req.params.id);
+    if (!request || request.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Yêu cầu không tồn tại hoặc đã xử lý trước đó.' });
+    }
+    request.status = 'rejected';
+    await request.save();
+    return res.json({ success: true, message: 'Đã từ chối yêu cầu truy cập.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
+  }
+});
 
-// POST /api/v1/access/grant (Giữ lại nếu bạn vẫn cần Admin ép quyền trực tiếp từ tổng đài)
+// API 5: Bác sĩ xem các quyền truy cập hiện đang còn hạn của mình
+// GET /api/v1/access/requests/active-for-doctor
+router.get('/requests/active-for-doctor', xacThucToken, phanQuyen('doctor'), async (req, res) => {
+  try {
+    const { doctorWallet } = req.query;
+    if (!doctorWallet) {
+      return res.status(400).json({ success: false, message: 'Thiếu doctorWallet!' });
+    }
+
+    const activeList = await AccessRequest.find({
+      doctorWallet,
+      status: 'approved',
+      expiresAt: { $gt: new Date() }
+    }).sort({ approvedAt: -1 });
+
+    return res.json({ success: true, data: activeList });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
+  }
+});
+
+// ─── ROUTES TIỆN ÍCH GỐC (admin ép quyền, check, logs) ───────────────────
+
 router.post('/grant', xacThucToken, phanQuyen('admin'), async (req, res) => {
   try {
     const { patientId, doctorWallet } = req.body;
@@ -147,7 +197,6 @@ router.post('/grant', xacThucToken, phanQuyen('admin'), async (req, res) => {
   }
 });
 
-// POST /api/v1/access/revoke
 router.post('/revoke', xacThucToken, phanQuyen('admin'), async (req, res) => {
   try {
     const { patientId, doctorWallet } = req.body;
@@ -157,13 +206,19 @@ router.post('/revoke', xacThucToken, phanQuyen('admin'), async (req, res) => {
     const contract = getAccessContract();
     const tx = await contract.revokeAccess(patientId, doctorWallet);
     await tx.wait();
+
+    // ✅ Đồng bộ trạng thái MongoDB nếu admin thu hồi tay
+    await AccessRequest.updateMany(
+      { patientId, doctorWallet, status: 'approved' },
+      { $set: { status: 'expired', revokeTxHash: tx.hash } }
+    );
+
     return res.json({ success: true, message: 'Thu hồi quyền thành công!', data: { txHash: tx.hash } });
   } catch (err) {
     return res.status(500).json({ success: false, message: 'Lỗi blockchain: ' + err.message });
   }
 });
 
-// GET /api/v1/access/check
 router.get('/check', xacThucToken, async (req, res) => {
   try {
     const { patientId, doctorWallet } = req.query;
@@ -178,7 +233,6 @@ router.get('/check', xacThucToken, async (req, res) => {
   }
 });
 
-// GET /api/v1/access/logs
 router.get('/logs', xacThucToken, phanQuyen('admin'), async (req, res) => {
   try {
     const contract = getAccessContract();

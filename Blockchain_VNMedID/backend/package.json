@@ -29,6 +29,7 @@
     "mongodb": "^7.2.0",
     "mongoose": "^9.6.3",
     "multer": "^2.2.0",
+    "node-cron": "^4.4.1",
     "pinata-web3": "^0.5.4",
     "tough-cookie": "^6.0.1"
   }
