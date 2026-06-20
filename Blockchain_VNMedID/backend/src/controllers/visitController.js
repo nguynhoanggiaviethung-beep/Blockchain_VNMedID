@@ -1,12 +1,14 @@
 const Visit = require('../models/Visit');
+const mongoose = require('mongoose');
 
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
 exports.bookAppointment = async (req, res) => {
   try {
-    const { patientId, patientName, specialty, appointmentDate, trieuChungLamSang } = req.body;
+    // ✅ ĐÃ CẬP NHẬT: Thêm hospitalName bóc tách từ body
+    const { patientId, patientName, specialty, appointmentDate, trieuChungLamSang, hospitalName } = req.body;
 
-    if (!patientId || !specialty || !appointmentDate) {
-      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa và ngày khám!' });
+    if (!patientId || !specialty || !appointmentDate || !hospitalName) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám và bệnh viện!' });
     }
 
     const visit = new Visit({
@@ -15,6 +17,7 @@ exports.bookAppointment = async (req, res) => {
       specialty,
       appointmentDate,
       trieuChungLamSang: trieuChungLamSang || "",
+      hospitalName, // ✅ Lưu tên bệnh viện vào DB
       status: "pending"
     });
     await visit.save();
@@ -25,17 +28,51 @@ exports.bookAppointment = async (req, res) => {
   }
 };
 
+// ─── ✅ THÊM: BÁC SĨ LẤY DANH SÁCH CHỜ THEO BỆNH VIỆN CÔNG TÁC ──────────────────
+exports.getDoctorPendingVisits = async (req, res) => {
+  try {
+    const doctorId = req.user?.userId;
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
+    }
+
+    const db = mongoose.connection.db;
+
+    // Tìm thông tin bệnh viện của bác sĩ
+    const doctorInfo = await db.collection("doctors").findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
+    if (!doctorInfo || !doctorInfo.hospitalName) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin bệnh viện của bác sĩ này!' });
+    }
+
+    const currentHospital = doctorInfo.hospitalName;
+
+    // Lấy các ca khám "pending" thuộc bệnh viện đó
+    const pendingVisits = await Visit.find({
+      hospitalName: currentHospital,
+      status: "pending"
+    }).sort({ createdAt: 1 });
+
+    return res.json({
+      success: true,
+      hospitalName: currentHospital,
+      count: pendingVisits.length,
+      data: pendingVisits
+    });
+
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
+
 // ─── BỆNH NHÂN XEM LỊCH CỦA MÌNH ───────────────────────────────────────────
 exports.getMyAppointments = async (req, res) => {
   try {
-    // ✅ Ưu tiên lấy từ token (an toàn), fallback sang query nếu cần
     const patientId = req.user?.userId || req.query.patientId;
 
     if (!patientId) {
       return res.status(400).json({ success: false, message: 'Thiếu patientId!' });
     }
 
-    // ✅ Tìm theo cả 2 trường hợp: patientId là string hoặc ObjectId
     const visits = await Visit.find({ patientId: patientId })
       .populate('doctorId', 'fullName specialty')
       .populate('shiftId', 'shift room date')
@@ -62,6 +99,7 @@ exports.getAllVisits = async (req, res) => {
         { doctorName:  { $regex: search, $options: 'i' } },
         { specialty:   { $regex: search, $options: 'i' } },
         { patientId:   { $regex: search, $options: 'i' } },
+        { hospitalName:{ $regex: search, $options: 'i' } }, // Tìm kiếm thêm theo bệnh viện
       ];
     }
 
