@@ -491,8 +491,8 @@ const Login = () => {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z" />
                 </svg>
               ),
-              label: "ĐỊA CHỈ BỆNH VIỆN",
-              value: "263–265 Trần Hưng Đạo, Cầu Ông Lãnh, Hồ Chí Minh",
+              label: "ĐƠN VỊ PHÁT TRIỂN NỀN TẢNG",
+              value: "Trung tâm Công nghệ số VNmedID Việt Nam",
             },
             {
               svg: (
