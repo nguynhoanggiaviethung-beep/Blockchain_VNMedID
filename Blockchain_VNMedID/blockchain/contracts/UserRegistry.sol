@@ -36,28 +36,47 @@ contract UserRegistry {
         uint8 role
     ) external onlyAdmin {
         require(wallet != address(0), "Wallet empty");
+        require(bytes(userId).length > 0, "User id empty");
         require(role >= ROLE_PATIENT && role <= ROLE_ADMIN, "Role wrong");
+        require(users[wallet].role == ROLE_NONE, "User exists");
 
         users[wallet] = UserInfo(userId, role, true);
+
         emit UserRegistered(wallet, userId, role);
     }
 
     function setUserStatus(address wallet, bool active) external onlyAdmin {
+        require(wallet != address(0), "Wallet empty");
         require(users[wallet].role != ROLE_NONE, "User not found");
+
         users[wallet].active = active;
+
         emit UserStatusChanged(wallet, active);
     }
 
     function getUser(address wallet)
         external
         view
-        returns (string memory userId, uint8 role, bool active)
+        returns (
+            string memory userId,
+            uint8 role,
+            bool active
+        )
     {
         UserInfo memory u = users[wallet];
-        return (u.userId, u.role, u.active);
+
+        return (
+            u.userId,
+            u.role,
+            u.active
+        );
     }
 
-    function isAuthorizedRole(address wallet, uint8 role) external view returns (bool) {
+    function isAuthorizedRole(address wallet, uint8 role)
+        external
+        view
+        returns (bool)
+    {
         return users[wallet].active && users[wallet].role == role;
     }
 }
