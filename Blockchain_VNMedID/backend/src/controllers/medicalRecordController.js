@@ -1,10 +1,17 @@
+// C:\NEW BLOCKCHAIN\Blockchain_VNMedID\backend\src\controllers\medicalRecordController.js
+
 const MedicalRecord = require('../models/MedicalRecord'); 
 const Visit = require('../models/Visit');
 const Invoice = require('../models/Invoice'); 
+const Patient = require('../models/Patient'); // ✅ Đảm bảo import Model Patient chính thức
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
+const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs'); 
 
+// ==========================================
+// 1. ĐĂNG KÝ CA KHÁM BAN ĐẦU
+// ==========================================
 const createRecord = async (req, res) => {
     try {
         const { trieuChung } = req.body;
@@ -33,6 +40,9 @@ const createRecord = async (req, res) => {
     }
 };
 
+// ==========================================
+// 2. LẤY DANH SÁCH CHỜ CHUNG
+// ==========================================
 const getPendingRecords = async (req, res) => {
     try {
         const pendingList = await MedicalRecord.find({ status: "Pending" })
@@ -53,6 +63,9 @@ const getPendingRecords = async (req, res) => {
     }
 };
 
+// ==========================================
+// 3. DANH SÁCH BỆNH NHÂN CHỜ KHÁM (TRANG BÁC SĨ)
+// ==========================================
 const getDoctorPendingList = async (req, res) => {
     try {
         const { specialty, date } = req.query;
@@ -72,23 +85,19 @@ const getDoctorPendingList = async (req, res) => {
             };
 
             try {
-                const db = mongoose.connection.db;
-                let patient = null;
-                try {
+                if (v.patientId) {
                     const objId = new mongoose.Types.ObjectId(v.patientId);
-                    patient = await db.collection('patients').findOne({ _id: objId });
-                } catch (_) {}
-                if (!patient) {
-                    patient = await db.collection('patients').findOne({ _id: v.patientId });
-                }
-                if (patient) {
-                    patientInfo.fullName = patient.fullName || "Bệnh nhân";
-                    patientInfo.dob      = patient.dob      || "";
-                    patientInfo.gender   = patient.gender   || "";
-                    patientInfo.phone    = patient.phone    || "---";
+                    // ✅ Thay đổi sang tìm bằng Model Patient chính thức giúp hiển thị chính xác tên
+                    const patient = await Patient.findById(objId);
+                    if (patient) {
+                        patientInfo.fullName = patient.fullName || "Bệnh nhân";
+                        patientInfo.dob      = patient.dob      || "";
+                        patientInfo.gender   = patient.gender   || "";
+                        patientInfo.phone    = patient.phone    || "---";
+                    }
                 }
             } catch (e) {
-                console.error("Lỗi lookup patient:", e.message);
+                console.error("Lỗi lookup patient tại pending list:", e.message);
             }
 
             return {
@@ -106,6 +115,9 @@ const getDoctorPendingList = async (req, res) => {
     }
 };
 
+// ==========================================
+// 4. DANH SÁCH BỆNH NHÂN ĐÃ KHÁM XONG
+// ==========================================
 const getDoctorCompletedList = async (req, res) => {
     try {
         const { specialty, date } = req.query;
@@ -123,23 +135,19 @@ const getDoctorCompletedList = async (req, res) => {
                 phone: "---"
             };
             try {
-                const db = mongoose.connection.db;
-                let patient = null;
-                try {
+                if (v.patientId) {
                     const objId = new mongoose.Types.ObjectId(v.patientId);
-                    patient = await db.collection('patients').findOne({ _id: objId });
-                } catch (_) {}
-                if (!patient) {
-                    patient = await db.collection('patients').findOne({ _id: v.patientId });
-                }
-                if (patient) {
-                    patientInfo.fullName = patient.fullName || "Bệnh nhân";
-                    patientInfo.dob      = patient.dob      || "";
-                    patientInfo.gender   = patient.gender   || "";
-                    patientInfo.phone    = patient.phone    || "---";
+                    // ✅ Đồng bộ sửa đổi tìm bằng Model Patient chính thức tại đây
+                    const patient = await Patient.findById(objId);
+                    if (patient) {
+                        patientInfo.fullName = patient.fullName || "Bệnh nhân";
+                        patientInfo.dob      = patient.dob      || "";
+                        patientInfo.gender   = patient.gender   || "";
+                        patientInfo.phone    = patient.phone    || "---";
+                    }
                 }
             } catch (e) {
-                console.error("Lỗi lookup patient:", e.message);
+                console.error("Lỗi lookup patient tại completed list:", e.message);
             }
             return {
                 _id: v._id,
@@ -149,6 +157,7 @@ const getDoctorCompletedList = async (req, res) => {
                 chanDoanChuyenMon: v.chanDoanChuyenMon,
                 huongDieuTri: v.huongDieuTri,
                 doctorName: v.doctorName,
+                ipfsHash: v.ipfsHash || "",      
                 ...patientInfo
             };
         }));
@@ -159,6 +168,9 @@ const getDoctorCompletedList = async (req, res) => {
     }
 };
 
+// ==========================================
+// 5. ĐẾM SỐ CA ĐÃ HOÀN THÀNH
+// ==========================================
 const getDoctorCompletedCount = async (req, res) => {
     try {
         const { specialty, date } = req.query;
@@ -173,6 +185,9 @@ const getDoctorCompletedCount = async (req, res) => {
     }
 };
 
+// ==========================================
+// 6. XỬ LÝ HOÀN THÀNH CA KHÁM (IPFS + SEPOLIA)
+// ==========================================
 const completeVisit = async (req, res) => {
     try {
         const { recordId, chanDoanChuyenMon, huongDieuTri, doctorName } = req.body;
@@ -183,29 +198,57 @@ const completeVisit = async (req, res) => {
             return res.status(400).json({ success: false, message: "Thiếu thông tin bệnh án!" });
         }
 
-        const db = mongoose.connection.db;
         const visitObjectId = new mongoose.Types.ObjectId(recordId);
-        
-        // 1. Cập nhật hồ sơ Off-chain trong MongoDB
-        await db.collection('visits').updateOne(
-           { _id: visitObjectId },
+        const existingVisit = await Visit.findById(visitObjectId);
+        if (!existingVisit) {
+            return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
+        }
+
+        // --------------------------------------------------------
+        // 📦 BƯỚC 1: UPLOAD TOÀN BỘ NỘI DUNG BỆNH ÁN LÊN IPFS
+        // --------------------------------------------------------
+        let ipfsHash = "";
+        let ipfsUrl = "";
+        try {
+            const recordPayload = {
+                recordId,
+                patientId: String(existingVisit.patientId),
+                specialty: existingVisit.specialty || "",
+                appointmentDate: existingVisit.appointmentDate || "",
+                trieuChungLamSang: existingVisit.trieuChungLamSang || "",
+                chanDoanChuyenMon: diagnose,
+                huongDieuTri: prescription,
+                doctorName: doctorName || "",
+                timestamp: new Date().toISOString(),
+            };
+
+            ipfsHash = await uploadJSONToIPFS(recordPayload, `vnmedid-record-${recordId}`);
+            ipfsUrl = getIPFSGatewayUrl(ipfsHash);
+            console.log(`[IPFS] Đã upload bệnh án thành công lên IPFS: ${ipfsUrl}`);
+        } catch (ipfsError) {
+            console.error('❌ Lỗi upload IPFS:', ipfsError.message);
+        }
+
+        // --------------------------------------------------------
+        // 💾 BƯỚC 2: CẬP NHẬT HỒ SƠ TRONG MONGODB (Lưu kèm ipfsHash)
+        // --------------------------------------------------------
+        const visit = await Visit.findByIdAndUpdate(
+            visitObjectId,
             { $set: {
                 chanDoanChuyenMon: diagnose,
                 huongDieuTri: prescription,
                 doctorName: doctorName || "",
                 status: "completed",
+                ipfsHash: ipfsHash, 
                 updatedAt: new Date()
-            }}
+            }},
+            { new: true }
         );
-        const visit = await db.collection('visits').findOne({ _id: visitObjectId });
 
-        if (!visit) {
-            return res.status(404).json({ success: false, message: "Không tìm thấy lịch khám!" });
-        }
-
-        // Lấy địa chỉ ví Blockchain chuẩn (0x...) của bệnh nhân từ database
+        // Lấy ví Blockchain của bệnh nhân từ bảng users
         let patientWalletAddress = null;
         try {
+            const db = mongoose.connection.db;
             let patientObjectId;
             try { patientObjectId = new mongoose.Types.ObjectId(visit.patientId); } catch(_) {}
             const patientUser = await db.collection('users').findOne({ 
@@ -215,41 +258,47 @@ const completeVisit = async (req, res) => {
                 patientWalletAddress = patientUser.walletAddress;
             }
         } catch (error) {
-            console.error("Lỗi lấy ví bệnh nhân cho blockchain:", error.message);
+            console.error("Lỗi lấy ví bệnh nhân:", error.message);
         }
 
-        // Định danh duy nhất để map bệnh án: Dùng ID bệnh nhân của MongoDB (String) theo đúng format struct Solidity của bạn
         const targetPatientKey = String(visit.patientId);
 
-        // 2. Đồng bộ mã băm (Hash) bệnh án lên Mạng Sepolia
+        // --------------------------------------------------------
+        // ⛓️ BƯỚC 3: ĐỒNG BỘ MÃ HASH IPFS LÊN SMART CONTRACT (SEPOLIA)
+        // --------------------------------------------------------
         let recordTxHash = null;
         try {
-            const recordContent = JSON.stringify({ recordId, diagnose, prescription, doctorName });
-            const recordHash = ethers.keccak256(ethers.toUtf8Bytes(recordContent));
+            // ✅ Đổi mới: Sử dụng trực tiếp ipfsHash làm nguyên liệu băm để lưu trữ trên Smart Contract
+            const hashSource = ipfsHash
+                ? JSON.stringify({ recordId, ipfsHash })
+                : JSON.stringify({ recordId, diagnose, prescription, doctorName });
 
-            console.log(`[Blockchain] Tiến hành đẩy hash bệnh án lên Key: ${targetPatientKey}`);
+            const recordHash = ethers.keccak256(ethers.toUtf8Bytes(hashSource));
+
+            console.log(`[Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey}`);
             const medicalContract = getContractInstance('medicalRecord');
-            
-            // Hàm Smart Contract yêu cầu: addRecordHash(string patientId, address doctorWallet, string recordHash)
+
+            // Gọi hàm smart contract lưu dấu vân tay dữ liệu bất biến
             const tx = await medicalContract.addRecordHash(
                 targetPatientKey,
-                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Địa chỉ ví bác sĩ / bệnh viện mặc định
+                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Địa chỉ bệnh viện điều hành
                 recordHash
             );
             await tx.wait();
             recordTxHash = tx.hash;
-            console.log(`[Blockchain] Đẩy lên thành công! TxHash: ${tx.hash}`);
+            console.log(`[Blockchain] Đồng bộ thành công! TxHash: ${tx.hash}`);
         } catch (bcError) {
             console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
         }
 
-        // 3. Tự động sinh hóa đơn viện phí (On-chain & Off-chain)
+        // --------------------------------------------------------
+        // 💳 BƯỚC 4: TỰ ĐỘNG SINH HÓA ĐƠN VIỆN PHÍ TRÊN CONTRACT
+        // --------------------------------------------------------
         try {
             if (patientWalletAddress) {
                 const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
                 const defaultAmount = 0.002; 
 
-                // Lưu hóa đơn vào MongoDB
                 const autoInvoice = new Invoice({
                     invoiceId: generatedInvoiceId,
                     amount: defaultAmount,
@@ -259,26 +308,33 @@ const completeVisit = async (req, res) => {
                 });
                 await autoInvoice.save();
 
-                // Lưu hóa đơn lên Smart Contract Payment Sepolia
                 const paymentContract = getContractInstance('payment');
                 const amountWei = ethers.parseEther(defaultAmount.toString());
                 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientWalletAddress, amountWei);
                 await paymentTx.wait();
-                
-                console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientWalletAddress}`);
-            } else {
-                console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
+
+                console.log(`[Hóa đơn] Đã tự động tạo hóa đơn: ${generatedInvoiceId} cho ví: ${patientWalletAddress}`);
             }
         } catch (invoiceError) {
             console.error('❌ Lỗi tự động sinh hóa đơn:', invoiceError.message);
         }
 
-        return res.json({ success: true, message: "Lưu bệnh án thành công!", data: visit, recordTxHash });
+        return res.json({ 
+            success: true, 
+            message: "Lưu bệnh án và đồng bộ chuỗi khối thành công!", 
+            data: visit, 
+            recordTxHash,
+            ipfsHash,
+            ipfsUrl
+        });
     } catch (error) {
-        return res.status(500).json({ success: false, message: "Lỗi hệ thống", error: error.message });
+        return res.status(500).json({ success: false, message: "Lỗi hệ thống hoàn tất ca khám", error: error.message });
     }
 };
 
+// ==========================================
+// 7. TRUY VẤN DỮ LIỆU LỊCH SỬ TỪ CONTRACT (ON-CHAIN)
+// ==========================================
 const getOnChainRecord = async (req, res) => {
     try {
         const { patientAddress } = req.params;
@@ -291,51 +347,45 @@ const getOnChainRecord = async (req, res) => {
         let records = [];
 
         try {
-            // Gọi chính xác hàm getPatientRecord(string) từ file .sol
             records = await medicalContract.getPatientRecord(patientAddress);
         } catch (contractError) {
-            console.warn(`⚠️ Bệnh nhân ${patientAddress} chưa có hồ sơ On-chain hoặc lỗi gọi hàm:`, contractError.message);
+            console.warn(`⚠️ Bệnh nhân chưa có hồ sơ On-chain:`, contractError.message);
             return res.status(200).json({
                 success: true,
-                data: {
-                    patientAddress: patientAddress,
-                    hospitalAddress: "0x0000000000000000000000000000000000000000",
-                    history: []
-                }
+                data: { patientAddress, hospitalAddress: "0x0000000000000000000000000000000000000000", history: [] }
             });
         }
 
-        // Map mảng Struct PatientRecord[] từ Solidity sang mảng JSON object cho Frontend
         const historyList = records.map((record, index) => {
-            // Trích xuất an toàn dữ liệu từ Struct object Solidity
             const hashValue = record.recordHash || record[0];
             const doctorWallet = record.doctorWallet || record[1];
             const timestamp = record.createdAt ? Number(record.createdAt) : Number(record[2]);
 
-            const dateObj = new Date(timestamp * 1000);
             return {
                 stt: index + 1,
                 hash: hashValue,
                 doctorWallet: doctorWallet,
-                time: dateObj.toLocaleString('vi-VN')
+                time: new Date(timestamp * 1000).toLocaleString('vi-VN')
             };
         });
 
         return res.status(200).json({
             success: true,
             data: {
-                patientAddress: patientAddress,
-                hospitalAddress: "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Mock địa chỉ bệnh viện xử lý ca bệnh
+                patientAddress,
+                hospitalAddress: "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586",
                 history: historyList
             }
         });
 
     } catch (error) {
-        console.error("❌ Lỗi khi thực thi hàm getPatientRecord:", error.message);
         return res.status(500).json({ success: false, message: "Lỗi truy vấn dữ liệu Blockchain", error: error.message });
     }
 };
 
+// ==========================================
+// 8. CÁC HÀM PHỤ TRỢ KHÁC
+// ==========================================
 const getRecordById = async (req, res) => {
     try {
         return res.status(200).json({ success: true, message: "Lấy chi tiết bệnh án thành công" });
