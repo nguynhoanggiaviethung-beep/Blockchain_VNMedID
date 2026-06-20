@@ -82,7 +82,7 @@ export default function PatientDashboard() {
     "Authorization": `Bearer ${token}`
   }
 
-  // ✅ ĐÃ SỬA: Truyền định danh ID MongoDB (userId) thay vì Địa chỉ ví để đồng bộ với Smart Contract mới
+  // ✅ ĐÃ SỬA CHUẨN: Truyền userId để khớp hoàn toàn với định danh trên Smart Contract mới
   const loadBlockchainRecords = async (patientIdentifier) => {
     if (!patientIdentifier) return;
     setLoadingBlockchain(true);
@@ -97,7 +97,7 @@ export default function PatientDashboard() {
       const apiErrorMessage = err.response?.data?.message || err.message;
       setBlockchainError(`Lỗi đồng bộ Blockchain: ${apiErrorMessage}`);
     } finally {
-      setBlockchain(false);
+      setLoadingBlockchain(false);
     }
   };
 
@@ -118,7 +118,7 @@ export default function PatientDashboard() {
             diUng: d.diUng || "", trieuChung: d.trieuChung || "", ghiChu: d.ghiChu || "",
           })
 
-          // ✅ ĐÃ SỬA: Gọi API On-chain bằng userId để khớp hoàn toàn cấu trúc mapping string trong SC
+          // ✅ ĐÃ SỬA CHUẨN: Đồng bộ On-chain bằng userId thay vì walletAddress
           if (userId) {
             loadBlockchainRecords(userId);
           }
@@ -170,7 +170,6 @@ export default function PatientDashboard() {
   useEffect(() => {
     if (tab === "invoice") loadInvoices()
     if (tab === "access") loadAccessRequests()
-    // Tự động làm mới dữ liệu On-chain bất cứ khi nào quay lại tab lịch sử chính
     if (tab === "info" && userId) loadBlockchainRecords(userId)
   }, [tab])
 
@@ -483,7 +482,7 @@ export default function PatientDashboard() {
             {saveSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>✅ {saveSuccess}</div>}
             {error && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13 }}>❌ {error}</div>}
 
-            {/* ===== TAB: THÔNG TIN ===== */}
+            {/* ===== TAB: THÔNG TIN & LỊCH SỬ ===== */}
             {tab === "info" && (
               loading ? <div style={{ textAlign: "center", padding: 20, color: GRAY_TEXT }}>Đang tải...</div> : (
                 <>
@@ -695,8 +694,118 @@ export default function PatientDashboard() {
                 </form>
               </div>
             )}
-            
-            {/* Các tab khác được giữ nguyên cấu trúc hiển thị */}
+
+            {/* ===== TAB: HÓA ĐƠN & THANH TOÁN ===== */}
+            {tab === "invoice" && (
+              <div>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Danh sách hóa đơn viện phí viện kiểm soát</h4>
+                {loadingInvoice ? <div style={{ fontSize: 13, color: GRAY_TEXT }}>Đang tải hóa đơn...</div> : invoiceList.length === 0 ? (
+                  <div style={{ color: GRAY_TEXT, fontStyle: "italic", fontSize: 13 }}>Bạn không có hóa đơn nào chưa thanh toán.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {invoiceList.map(inv => (
+                      <div key={inv.invoiceId} style={{ background: "#F8FAFC", borderRadius: 10, padding: "16px", border: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: PRIMARY }}>Mã Hóa Đơn: #{inv.invoiceId}</div>
+                          <div style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 4 }}>Nội dung: {inv.description || "Thanh toán viện phí VNmedID"}</div>
+                          <div style={{ fontSize: 15, fontWeight: 700, color: "#B91C1C", marginTop: 4 }}>Số tiền: {inv.amount} ETH</div>
+                        </div>
+                        <button 
+                          onClick={() => handlePayWithMetaMask(inv)}
+                          disabled={payingId === inv.invoiceId}
+                          style={{ background: "#F59E0B", color: WHITE, border: "none", padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                        >
+                          {payingId === inv.invoiceId ? "⏳ Đang xử lý..." : "💳 Thẻ MetaMask"}
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== TAB: CẤP QUYỀN TRUY CẬP ===== */}
+            {tab === "access" && (
+              <div>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Yêu cầu cấp quyền xem hồ sơ từ Bác sĩ</h4>
+                {loadingAccess ? <div style={{ fontSize: 13, color: GRAY_TEXT }}>Đang tải danh sách yêu cầu...</div> : accessRequests.length === 0 ? (
+                  <div style={{ color: GRAY_TEXT, fontStyle: "italic", fontSize: 13 }}>Không có yêu cầu phân quyền nào đang chờ duyệt.</div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                    {accessRequests.map(req => (
+                      <div key={req._id} style={{ background: "#F8FAFC", borderRadius: 10, padding: "16px", border: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                        <div>
+                          <div style={{ fontWeight: 600, color: PRIMARY }}>Bác sĩ ví: {req.doctorWallet?.slice(0, 20)}...</div>
+                          <div style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 4 }}>Trạng thái: <span style={{ color: "#D97706", fontWeight: 600 }}>{req.status}</span></div>
+                        </div>
+                        {req.status === "pending" && (
+                          <button 
+                            onClick={() => handleApproveRequest(req)}
+                            disabled={approvingId === req._id}
+                            style={{ background: "#10B981", color: WHITE, border: "none", padding: "8px 16px", borderRadius: 8, fontWeight: 600, cursor: "pointer" }}
+                          >
+                            {approvingId === req._id ? "⏳ Đang ký..." : "🛡️ Duyệt & Ký Smart Contract"}
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ===== TAB: CẬP NHẬT THÔNG TIN ===== */}
+            {tab === "edit" && (
+              <div style={{ maxWidth: 600 }}>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Cập nhật thông tin cá nhân cơ bản</h4>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Họ và tên bệnh nhân</label>
+                  <input type="text" value={formBasic.fullName} onChange={e => setFormBasic(p => ({ ...p, fullName: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Ngày sinh (YYYY-MM-DD)</label>
+                  <input type="text" value={formBasic.dob} onChange={e => setFormBasic(p => ({ ...p, dob: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Số điện thoại liên lạc</label>
+                  <input type="text" value={formBasic.phone} onChange={e => setFormBasic(p => ({ ...p, phone: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Địa chỉ thường trú</label>
+                  <input type="text" value={formBasic.address} onChange={e => setFormBasic(p => ({ ...p, address: e.target.value }))} style={inputStyle} />
+                </div>
+                <button onClick={handleSaveBasic} disabled={saving} style={{ background: PRIMARY, color: WHITE, border: "none", padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  {saving ? "⏳ Đang lưu..." : "💾 Lưu thay đổi thông tin"}
+                </button>
+              </div>
+            )}
+
+            {/* ===== TAB: HỒ SƠ SỨC KHỎE ===== */}
+            {tab === "health" && (
+              <div style={{ maxWidth: 600 }}>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Cập nhật hồ sơ sức khỏe nền bệnh nhân</h4>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Nhóm máu hệ ABO</label>
+                  <input type="text" value={formHealth.nhomMau} onChange={e => setFormHealth(p => ({ ...p, nhomMau: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Tiền sử dị ứng (Thuốc, thực phẩm)</label>
+                  <input type="text" value={formHealth.diUng} onChange={e => setFormHealth(p => ({ ...p, diUng: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 12 }}>
+                  <label style={labelStyle}>Tiền sử bệnh án gia đình / Bản thân</label>
+                  <input type="text" value={formHealth.tienSuBenh} onChange={e => setFormHealth(p => ({ ...p, tienSuBenh: e.target.value }))} style={inputStyle} />
+                </div>
+                <div style={{ marginBottom: 16 }}>
+                  <label style={labelStyle}>Ghi chú thêm cho bác sĩ chuyên khoa</label>
+                  <textarea value={formHealth.ghiChu} onChange={e => setFormHealth(p => ({ ...p, ghiChu: e.target.value }))} style={{ ...inputStyle, height: 80, resize: "none" }} />
+                </div>
+                <button onClick={handleSaveHealth} disabled={saving} style={{ background: PRIMARY, color: WHITE, border: "none", padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>
+                  {saving ? "⏳ Đang cập nhật..." : "🏥 Cập nhật hồ sơ sức khỏe"}
+                </button>
+              </div>
+            )}
+
           </div>
         </div>
       </div>
