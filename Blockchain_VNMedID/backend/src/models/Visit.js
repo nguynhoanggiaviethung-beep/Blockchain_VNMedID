@@ -15,7 +15,7 @@ const visitSchema = new mongoose.Schema({
   doctorName:       { type: String, default: "" },
   doctorId:         { type: mongoose.Schema.Types.ObjectId, ref: 'Doctor', default: null }, // ✅ thêm để phân công BS
   shiftId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },  // ✅ liên kết ca trực
-  patientName:      { type: String, default: "" }
+  patientName:      { type: String, default: "" },
   hospitalName:     { type: String, default: "" }, // ✅ cache tên BN cho dễ hiển thị
 }, { timestamps: true });
 
