@@ -189,7 +189,11 @@ const getDoctorCompletedCount = async (req, res) => {
 // 6. XỬ LÝ HOÀN THÀNH CA KHÁM (IPFS + SEPOLIA)
 // ==========================================
 const completeVisit = async (req, res) => {
-    console.log("COMPLETE VISIT CALLED");
+    console.log("=========================================");
+    console.log("🚀 COMPLETE VISIT CALLED");
+    console.log("🧐 MEDICAL_RECORD_ADDRESS ĐANG ĐỌC TỪ ENV:", process.env.MEDICAL_RECORD_ADDRESS);
+    console.log("=========================================");
+    
     try {
         const { recordId, chanDoanChuyenMon, huongDieuTri, doctorName } = req.body;
         const diagnose = chanDoanChuyenMon;
@@ -279,10 +283,14 @@ const completeVisit = async (req, res) => {
             console.log(`[Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey}`);
             const medicalContract = getContractInstance('medicalRecord');
 
+            // 🌟 ĐÃ SỬA CHÍ MẠNG: Lấy địa chỉ ví động của Backend đang ký giao dịch thay vì truyền cứng '0xD2db...'
+            const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0x66Bd396353701d97a7C21A23f57044761133dcD5"; 
+            console.log(`[Blockchain] Địa chỉ thực hiện giao dịch (Hospital/Admin): ${backendSignerAddress}`);
+
             // Gọi hàm smart contract lưu dấu vân tay dữ liệu bất biến
             const tx = await medicalContract.addRecordHash(
                 targetPatientKey,
-                "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586", // Địa chỉ bệnh viện điều hành
+                backendSignerAddress, // ✅ Truyền chính xác ví động khớp với chữ ký giao dịch
                 recordHash
             );
             await tx.wait();
@@ -290,21 +298,15 @@ const completeVisit = async (req, res) => {
             console.log(`[Blockchain] Đồng bộ thành công! TxHash: ${tx.hash}`);
         } catch (bcError) {
             console.log("========== BLOCKCHAIN ERROR ==========");
-
             console.log(bcError);
-
             console.log("MESSAGE:");
             console.log(bcError.message);
-
             console.log("SHORT MESSAGE:");
             console.log(bcError.shortMessage);
-
             console.log("REASON:");
             console.log(bcError.reason);
-
             console.log("DATA:");
             console.log(bcError.data);
-
             console.log("======================================");
         }
 

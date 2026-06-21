@@ -103,13 +103,8 @@ async function main() {
   await contract3.waitForDeployment();
   const addr3 = await contract3.getAddress();
   console.log("\n🎯🎯🎯 TARGET - MedicalRecord (CẦN LẤY):", addr3, "\n");
-
-  console.log("⏳ Đang thiết lập quyền truy cập giữa các contract...");
-  const accessControlInstance = new ethers.Contract(addr2, accessControlData.abi, wallet);
-  const MEDICAL_RECORD_ROLE = ethers.keccak256(ethers.toUtf8Bytes("MEDICAL_RECORD_ROLE"));
-  const tx = await accessControlInstance.grantRole(MEDICAL_RECORD_ROLE, addr3);
-    await tx.wait();
-    console.log("✅ Đã cấp quyền thành công cho MedicalRecord trên AccessControl!");
+  
+  console.log("✅ Bỏ qua thiết lập quyền thủ công (Hệ thống đã tự động hóa)");
     
   // 4. Deploy Payment
   console.log("⏳ Đang deploy Payment...");
