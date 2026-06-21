@@ -1,10 +1,15 @@
+// C:\NEW BLOCKCHAIN\Blockchain_VNMedID\backend\src\controllers\invoiceController.js
+
 const Invoice = require('../models/Invoice');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
 
+// =========================================================================
+// 1. TẠO HÓA ĐƠN MỚI (Hỗ trợ cả tạo thủ công lẫn nhận mảng items thuốc)
+// =========================================================================
 exports.createInvoice = async (req, res) => {
   try {
-    const { invoiceId, amount, patientWallet } = req.body;
+    const { invoiceId, amount, patientWallet, items, totalVND } = req.body;
 
     if (!invoiceId || !amount || !patientWallet) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập mã hóa đơn, số tiền và ví bệnh nhân' });
@@ -15,7 +20,15 @@ exports.createInvoice = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Mã hóa đơn đã tồn tại!' });
     }
 
-    const invoice = new Invoice({ invoiceId, amount, patientWallet, paymentStatus: 'pending' });
+    // Đã bổ sung lưu kèm danh sách items thuốc và tổng VND nếu có truyền lên
+    const invoice = new Invoice({ 
+      invoiceId, 
+      amount, 
+      patientWallet, 
+      paymentStatus: 'pending',
+      items: items || [],
+      totalVND: totalVND || 0
+    });
     await invoice.save();
 
     let txHash = null;
@@ -40,6 +53,9 @@ exports.createInvoice = async (req, res) => {
   }
 };
 
+// =========================================================================
+// 2. XỬ LÝ THANH TOÁN HÓA ĐƠN (Xác thực On-chain)
+// =========================================================================
 exports.makePayment = async (req, res) => {
   try {
     const { invoiceId, txHash } = req.body;
@@ -88,7 +104,9 @@ exports.makePayment = async (req, res) => {
   }
 };
 
-// ✅ Fix bóc tách token linh hoạt phục vụ hiển thị trên web deploy
+// =========================================================================
+// 3. LẤY TOÀN BỘ HÓA ĐƠN CỦA TÔI (Trả về danh sách có kèm items thuốc)
+// =========================================================================
 exports.getMyInvoices = async (req, res) => {
   try {
     const mongoose = require('mongoose');
@@ -114,6 +132,7 @@ exports.getMyInvoices = async (req, res) => {
       return res.json({ success: true, data: [], message: 'Chưa liên kết ví MetaMask' });
     }
 
+    // Lấy hóa đơn sắp xếp mới nhất, tự động lấy thêm mảng items và totalVND vừa thêm
     const invoices = await Invoice.find({
       patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
     }).sort({ createdAt: -1 });
@@ -121,5 +140,29 @@ exports.getMyInvoices = async (req, res) => {
     return res.json({ success: true, data: invoices });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
+
+// =========================================================================
+// 4. BỔ SUNG: LẤY CHI TIẾT 1 HÓA ĐƠN THEO ID (Phục vụ Frontend xem Popup)
+// =========================================================================
+exports.getInvoiceById = async (req, res) => {
+  try {
+    const { id } = req.params; // Nhận invoiceId hoặc _id từ URL
+    
+    const invoice = await Invoice.findOne({
+      $or: [
+        { invoiceId: id },
+        { _id: mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null }
+      ]
+    });
+
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin hóa đơn này!' });
+    }
+
+    return res.json({ success: true, data: invoice });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi lấy chi tiết hóa đơn', error: error.message });
   }
 };
