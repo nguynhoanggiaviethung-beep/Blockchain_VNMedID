@@ -5,7 +5,15 @@ const invoiceSchema = new mongoose.Schema({
   amount:        { type: Number },
   patientWallet: { type: String },
   txHash:        { type: String },
-  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' }
-}, { timestamps: true });
+  paymentStatus: { type: String, enum: ['pending', 'paid', 'failed'], default: 'pending' },
+
+  items: [{
+        drugName: String,
+        priceVND: Number
+    }],
+    totalVND: { type: Number }, // Lưu thêm tổng VND để đối chiếu nếu cần
+
+    createdAt: { type: Date, default: Date.now }
+});
 
 module.exports = mongoose.model('Invoice', invoiceSchema);

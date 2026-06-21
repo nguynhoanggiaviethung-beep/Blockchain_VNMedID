@@ -271,53 +271,65 @@ const completeVisit = async (req, res) => {
         }
 
         // --------------------------------------------------------
-        // 💳 BƯỚC 4 (MỚI): QUÉT ĐƠN THUỐC VND -> TỰ ĐỘNG ĐỔI SANG ETH THEO TỶ GIÁ
+        // 💳 BƯỚC 4: QUÉT ĐƠN THUỐC, LƯU CHI TIẾT VÀ QUY ĐỔI SANG ETH
         // --------------------------------------------------------
-        let totalETH = 0.002; // Giá trị dự phòng mặc định
+        let totalETH = 0.002; 
+        let invoiceItems = []; // Mảng chứa chi tiết tên danh mục/thuốc cùng giá tiền mặt
+        let totalVND = 100000; // Mặc định phí khám gốc ban đầu là 100.000 VND
+
         try {
             if (patientWalletAddress) {
                 const generatedInvoiceId = `INV-${recordId.toString().substring(16)}`; 
                 const prescriptionText = (huongDieuTri || "").toLowerCase(); 
                 
-                // 1. Tính tổng tiền bằng VND (Mặc định phí khám gốc là 100.000 VND)
-                let totalVND = 100000; 
-                
+                // Khởi tạo mục đầu tiên là chi phí khám bệnh
+                invoiceItems.push({
+                    drugName: "Phí khám lâm sàng tổng quát",
+                    priceVND: 100000
+                });
+
+                // Tìm kiếm thông tin thuốc từ đơn thuốc bác sĩ kê
                 Object.keys(DRUG_PRICE_LIST).forEach(drug => {
                     if (prescriptionText.includes(drug)) {
                         totalVND += DRUG_PRICE_LIST[drug];
+                        invoiceItems.push({
+                            drugName: drug.toUpperCase(), // Chuyển chữ hoa nhìn trực quan
+                            priceVND: DRUG_PRICE_LIST[drug]
+                        });
                         console.log(`[Tính tiền] Phát hiện thuốc: ${drug} -> Cộng thêm ${DRUG_PRICE_LIST[drug]} VND`);
                     }
                 });
                 
-                console.log(`[Tỷ giá] Tổng tiền hóa đơn bằng tiền mặt: ${totalVND.toLocaleString('vi-VN')} VND`);
+                console.log(`[Tỷ giá] Tổng hóa đơn tiền mặt: ${totalVND.toLocaleString('vi-VN')} VND`);
 
-                // 2. Cấu hình Tỷ giá ETH/VND cố định (Giả lập: 1 ETH = 90.000.000 VND)
+                // Tỷ giá quy đổi ETH/VND cố định (1 ETH = 90.000.000 VND)
                 const ETH_TO_VND_RATE = 90000000; 
-                
                 totalETH = totalVND / ETH_TO_VND_RATE;
                 totalETH = parseFloat(totalETH.toFixed(5));
                 if (totalETH === 0) totalETH = 0.001; 
 
-                console.log(`[Tỷ giá] Đã quy đổi thành công sang Web3: ${totalETH} ETH`);
+                console.log(`[Tỷ giá] Đã quy đổi sang Web3: ${totalETH} ETH`);
 
-                // 3. Lưu thông tin hóa đơn mới vào cơ sở dữ liệu MongoDB
+                // Lưu thông tin hóa đơn mới CHỨA CẢ CHI TIẾT TÊN THUỐC + GIÁ vào MongoDB
                 const autoInvoice = new Invoice({
                     invoiceId: generatedInvoiceId,
                     amount: totalETH, 
                     patientWallet: patientWalletAddress,
                     paymentStatus: 'pending',
+                    items: invoiceItems,     // 🌟 Đưa mảng chi tiết vào DB
+                    totalVND: totalVND,      // 🌟 Lưu tổng tiền mặt VND
                     createdAt: new Date()
                 });
                 await autoInvoice.save();
 
-                // 4. Gọi Smart Contract Payment đồng bộ hóa đơn chính thức lên mạng Sepolia Testnet
+                // Gọi Smart Contract Payment đồng bộ hóa đơn lên chuỗi khối Sepolia Testnet
                 const paymentContract = getContractInstance('payment');
                 const amountWei = ethers.parseEther(totalETH.toString());
                 
                 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientWalletAddress, amountWei);
                 await paymentTx.wait();
 
-                console.log(`[Hóa đơn] Đã tạo và đồng bộ hóa đơn quy đổi ${generatedInvoiceId} lên Blockchain thành công!`);
+                console.log(`[Hóa đơn] Đã tạo hóa đơn chi tiết ${generatedInvoiceId} lên Blockchain thành công!`);
             }
         } catch (invoiceError) {
             console.error('❌ Lỗi hệ thống khi quy đổi và sinh hóa đơn tự động:', invoiceError.message);
