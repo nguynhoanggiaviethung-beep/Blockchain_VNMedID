@@ -280,7 +280,14 @@ const Login = () => {
       setLoading(true);
       setErrors({});
 
-      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+      // 🌟 ÉP METAMASK PHẢI XÓA CACHE VÀ MỞ BẢNG CHỌN TÀI KHOẢN
+      await window.ethereum.request({
+        method: "wallet_requestPermissions",
+        params: [{ eth_accounts: {} }],
+      });
+
+      // Sau khi người dùng chọn tài khoản xong, lấy chính xác địa chỉ ví đó
+      const accounts = await window.ethereum.request({ method: "eth_accounts" });
       const walletAddress = accounts[0];
 
       const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
@@ -289,7 +296,7 @@ const Login = () => {
       // ✅ Luôn đăng nhập bằng ví — không dùng token cũ
       const response = await api.post("/auth/login-wallet", { walletAddress, selectedRole });
       const loginData = response.data?.data;
-      console.log("🔍 loginData:", loginData); // ← thêm dòng này
+      console.log("🔍 loginData:", loginData); 
       if (!loginData?.token) throw new Error("Không nhận được token!");
 
       localStorage.clear();
@@ -309,8 +316,12 @@ const Login = () => {
       navigate(roleRedirect[loginData.role] || "/");
 
     } catch (err) {
-      const msg = err.response?.data?.message || err.message || "Kết nối ví thất bại!";
-      setErrors({ general: msg });
+      if (err.code === 4001) {
+        setErrors({ general: "Bạn đã từ chối quyền kết nối tài khoản trên MetaMask." });
+      } else {
+        const msg = err.response?.data?.message || err.message || "Kết nối ví thất bại!";
+        setErrors({ general: msg });
+      }
     } finally {
       setLoading(false);
     }
@@ -412,7 +423,7 @@ const Login = () => {
         <div style={{ position: "relative", margin: "0 0 20px 0" }}>
           {/* Sparkle SVGs cố định quanh chữ */}
           {[
-            { top: -18, left: -24, size: 18, delay: "0s",   dur: "2.1s" },
+            { top: -18, left: -24, size: 18, delay: "0s",    dur: "2.1s" },
             { top: -10, left: "60%", size: 14, delay: "0.4s", dur: "1.8s" },
             { top: 10,  left: -16, size: 11, delay: "0.8s", dur: "2.4s" },
             { top: -20, left: "30%", size: 16, delay: "1.1s", dur: "1.9s" },
