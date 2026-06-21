@@ -247,7 +247,7 @@ const completeVisit = async (req, res) => {
                 ipfsHash: ipfsHash, 
                 updatedAt: new Date()
             }},
-            { new: true }
+            { returnDocument: 'after' }
         );
 
         // Lấy ví Blockchain của bệnh nhân từ bảng users
