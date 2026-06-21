@@ -189,6 +189,7 @@ const getDoctorCompletedCount = async (req, res) => {
 // 6. XỬ LÝ HOÀN THÀNH CA KHÁM (IPFS + SEPOLIA)
 // ==========================================
 const completeVisit = async (req, res) => {
+    console.log("COMPLETE VISIT CALLED");
     try {
         const { recordId, chanDoanChuyenMon, huongDieuTri, doctorName } = req.body;
         const diagnose = chanDoanChuyenMon;
@@ -288,7 +289,23 @@ const completeVisit = async (req, res) => {
             recordTxHash = tx.hash;
             console.log(`[Blockchain] Đồng bộ thành công! TxHash: ${tx.hash}`);
         } catch (bcError) {
-            console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
+            console.log("========== BLOCKCHAIN ERROR ==========");
+
+            console.log(bcError);
+
+            console.log("MESSAGE:");
+            console.log(bcError.message);
+
+            console.log("SHORT MESSAGE:");
+            console.log(bcError.shortMessage);
+
+            console.log("REASON:");
+            console.log(bcError.reason);
+
+            console.log("DATA:");
+            console.log(bcError.data);
+
+            console.log("======================================");
         }
 
         // --------------------------------------------------------
