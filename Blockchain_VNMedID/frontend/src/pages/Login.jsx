@@ -280,14 +280,14 @@ const Login = () => {
       setLoading(true);
       setErrors({});
 
-      // 🌟 ÉP METAMASK PHẢI XÓA CACHE VÀ MỞ BẢNG CHỌN TÀI KHOẢN
+      // 1. Ép MetaMask mở bảng cấp quyền/chọn tài khoản
       await window.ethereum.request({
         method: "wallet_requestPermissions",
         params: [{ eth_accounts: {} }],
       });
 
-      // Sau khi người dùng chọn tài khoản xong, lấy chính xác địa chỉ ví đó
-      const accounts = await window.ethereum.request({ method: "eth_accounts" });
+      // 2. 🌟 THAY ĐỔI QUAN TRỌNG: Dùng eth_requestAccounts để lấy ĐÚNG tài khoản đang active
+      const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0];
 
       const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
@@ -296,7 +296,9 @@ const Login = () => {
       // ✅ Luôn đăng nhập bằng ví — không dùng token cũ
       const response = await api.post("/auth/login-wallet", { walletAddress, selectedRole });
       const loginData = response.data?.data;
-      console.log("🔍 loginData:", loginData); 
+      console.log("🔍 Ví đang đăng nhập thực tế:", walletAddress); 
+      console.log("🔍 loginData trả về:", loginData); 
+      
       if (!loginData?.token) throw new Error("Không nhận được token!");
 
       localStorage.clear();
