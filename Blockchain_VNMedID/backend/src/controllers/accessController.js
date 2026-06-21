@@ -1,6 +1,6 @@
-const { ethers } = require('ethers');
+const mongoose = require("mongoose");
+const { getContractInstance } = require("../config/web3");
 
-// POST /access/grant — Cấp quyền bác sĩ xem hồ sơ (Admin)
 exports.grantAccess = async (req, res) => {
   try {
     const { doctorId, patientId } = req.body;
@@ -8,19 +8,58 @@ exports.grantAccess = async (req, res) => {
     if (!doctorId || !patientId) {
       return res.status(400).json({
         success: false,
-        message: 'Vui lòng nhập doctorId và patientId'
+        message: "Thiếu doctorId hoặc patientId"
       });
     }
 
-    // Giả lập txHash blockchain (sau này thay bằng blockchain thật)
-    const mockTxHash = '0x' + Math.random().toString(16).substring(2, 42);
+    const db = mongoose.connection.db;
+
+    const doctor = await db
+      .collection("doctors")
+      .findOne({
+        _id: new mongoose.Types.ObjectId(doctorId)
+      });
+
+    if (!doctor) {
+      return res.status(404).json({
+        success: false,
+        message: "Không tìm thấy bác sĩ"
+      });
+    }
+
+    if (!doctor.walletAddress) {
+      return res.status(400).json({
+        success: false,
+        message: "Bác sĩ chưa có ví blockchain"
+      });
+    }
+
+    const accessContract =
+      getContractInstance("accessControl");
+
+    const tx = await accessContract.grantAccess(
+      patientId,
+      doctor.walletAddress
+    );
+
+    const receipt = await tx.wait();
 
     return res.status(200).json({
       success: true,
-      message: 'Cấp quyền truy cập thành công!',
-      data: { txHash: mockTxHash }
+      message: "Cấp quyền thành công",
+      data: {
+        txHash: receipt.hash,
+        doctorWallet: doctor.walletAddress,
+        patientId
+      }
     });
+
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+    console.error(error);
+
+    return res.status(500).json({
+      success: false,
+      message: error.message
+    });
   }
 };

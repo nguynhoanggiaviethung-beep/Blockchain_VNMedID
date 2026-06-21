@@ -219,7 +219,7 @@ router.post('/revoke', xacThucToken, phanQuyen('admin'), async (req, res) => {
   }
 });
 
-router.get('/check', xacThucToken, async (req, res) => {
+router.get('/check', async (req, res) => {
   try {
     const { patientId, doctorWallet } = req.query;
     if (!patientId || !doctorWallet) {
