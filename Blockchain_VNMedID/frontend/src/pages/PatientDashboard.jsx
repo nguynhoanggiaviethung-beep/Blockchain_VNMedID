@@ -629,7 +629,7 @@ export default function PatientDashboard() {
                                 <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>
                                   <code style={{ color: "#D946EF", background: "#FDF4FF", padding: "2px 6px", borderRadius: 4, wordBreak: "break-all", fontWeight: 600 }}>
                                     {item.hash}
-                                   travel</code>
+                                  </code>
                                 </td>
                               </tr>
                             ))}
@@ -665,6 +665,7 @@ export default function PatientDashboard() {
                     <select value={formAppointment.specialty} onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))} style={inputStyle}>
                       <option value="Nội khoa">Nội khoa tổng quát</option>
                       <option value="Ngoại khoa">Ngoại khoa chuyên sâu</option>
+                      <option value="Răng Hàm Mặt">Răng Hàm Mặt</option>
                       <option value="Nhi khoa">Nhi khoa (Trẻ em)</option>
                       <option value="Sản phụ khoa">Sản phụ khoa</option>
                       <option value="Tai Mũi Họng">Tai Mũi Họng</option>
