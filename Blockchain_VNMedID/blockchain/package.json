@@ -1,17 +1,22 @@
 {
   "name": "vnmedid-blockchain",
   "version": "1.0.0",
-  "description": "Smart contract module for VNMedID project",
   "type": "module",
   "scripts": {
-    "compile": "hardhat compile",
-    "node": "hardhat node",
-    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
-    "deploy:sepolia": "hardhat run scripts/deploy.ts --network sepolia"
+    "compile": "npx hardhat compile",
+    "node": "npx hardhat node",
+    "deploy:local": "npx hardhat run scripts/deploy.ts --network localhost",
+    "deploy:sepolia": "npx hardhat run scripts/deploy_fix.js --network sepolia"
   },
   "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^7.0.0",
     "@nomicfoundation/hardhat-toolbox-mocha-ethers": "^3.0.0",
-    "hardhat": "^3.0.0",
+    "dotenv": "^17.4.2",
+    "ethers": "^6.17.0",
+    "hardhat": "^3.9.0",
     "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "solc": "^0.8.20"
   }
 }
