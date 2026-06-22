@@ -67,6 +67,8 @@ app.get('/api/v1/drugs/search', async (req, res) => {
 
 // 5. ROUTES ĐỊNH TUYẾN
 require('./src/models/Shift');
+app.use('/api/v1/shifts', require('./src/routes/shiftRoutes')); // ✅ THÊM MỚI
+
 app.use('/api/v1/auth', require('./src/routes/authRoutes'));
 app.use('/api/v1/ekyc', require('./src/routes/ekycRoutes'));
 app.use('/api/v1/patients', require('./src/routes/patientRoutes'));
