@@ -9,7 +9,7 @@ async function kichHoatBacSi() {
     
     // 🎯 ĐIỀN ĐỊA CHỈ VÍ METAMASK CỦA BÁC SĨ LÊ THỊ THU THƯ VÀO ĐÂY
     // (Lấy ví thực tế hiển thị trên MetaMask của tài khoản bác sĩ Thu Thư)
-    const doctorWallet = "0x0a8cd820cddec3d724cf532177569598cbc656b2"; // Thay bằng ví thực tế nếu ví này chưa đúng
+    const doctorWallet = "0xc3b16a4657460e6ce68bdda91a0f8a49d5dd8039"; // Thay bằng ví thực tế nếu ví này chưa đúng
     const userId = "DOC_THUTHU_2026"; 
     const ROLE_DOCTOR = 2; // Quyền Doctor trong contract của bạn
 
