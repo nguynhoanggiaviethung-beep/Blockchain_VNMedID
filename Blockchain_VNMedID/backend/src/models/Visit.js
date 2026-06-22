@@ -17,6 +17,13 @@ const visitSchema = new mongoose.Schema({
   shiftId:          { type: mongoose.Schema.Types.ObjectId, ref: 'Shift', default: null },  // ✅ liên kết ca trực
   patientName:      { type: String, default: "" },
   hospitalName:     { type: String, default: "" }, // ✅ cache tên BN cho dễ hiển thị
+  // ✅ THÊM MỚI: Bác sĩ kê tên thuốc → hệ thống tự tra DAV lấy giá
+  drugs: [{
+    drugName: { type: String, default: "" },  // Tên thuốc từ DAV
+    priceVND:  { type: Number, default: 0 },  // Giá lấy từ DAV
+  }],
+  totalVND: { type: Number, default: 0 },     // Tổng tiền VND tự tính
+  
 }, { timestamps: true });
 
 module.exports = mongoose.model('Visit', visitSchema);

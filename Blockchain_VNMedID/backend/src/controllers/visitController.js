@@ -4,6 +4,31 @@ const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
 const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs'); // ✅ Thêm IPFS
+const axios = require('axios');
+const { wrapper } = require('axios-cookiejar-support');
+const { CookieJar } = require('tough-cookie');
+
+const getDrugPriceFromDAV = async (drugName) => {
+  try {
+    const jar = new CookieJar();
+    const client = wrapper(axios.create({ jar, withCredentials: true }));
+    await client.get('https://dichvucong.dav.gov.vn/congbogiathuoc');
+    const cookies = await jar.getCookies('https://dichvucong.dav.gov.vn');
+    const xsrf = cookies.find(c => c.key === 'XSRF-TOKEN')?.value;
+    if (!xsrf) return null;
+    const { data } = await client.post(
+      'https://dichvucong.dav.gov.vn/api/services/app/quanLyGiaThuoc/GetListCongBoPublicPaging',
+      { filterAll: drugName, CongBoGiaThuoc: {}, KichHoat: true, skipCount: 0, maxResultCount: 1, sorting: null },
+      { headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrf, Origin: 'https://dichvucong.dav.gov.vn', Referer: 'https://dichvucong.dav.gov.vn/congbogiathuoc' } }
+    );
+    const items = data?.result?.items;
+    if (!items || items.length === 0) return null;
+    return { tenThuoc: items[0].tenThuoc, giaBanBuonDuKien: items[0].giaBanBuonDuKien || 0 };
+  } catch (err) {
+    console.error(`❌ DAV lỗi "${drugName}":`, err.message);
+    return null;
+  }
+};
 
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
 exports.bookAppointment = async (req, res) => {
@@ -122,11 +147,12 @@ exports.getAllVisits = async (req, res) => {
 exports.updateVisit = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      status, doctorId, doctorName, shiftId,
-      diagnosis, chanDoanChuyenMon, huongDieuTri,
-      prescription, note, hospitalName
-    } = req.body;
+    const { status, doctorId, doctorName, shiftId,
+  diagnosis, chanDoanChuyenMon, huongDieuTri,
+  prescription, note, hospitalName,
+  drugNames  // ✅ THÊM
+} = req.body;
+
 
     // Lấy visit gốc trước để biết trạng thái cũ và đủ context
     const existingVisit = await Visit.findById(id);
@@ -135,6 +161,23 @@ exports.updateVisit = async (req, res) => {
     }
 
     const isCompletingNow = status === 'completed' && existingVisit.status !== 'completed';
+    // ✅ THÊM: Tra giá thuốc từ DAV
+let drugsWithPrice = existingVisit.drugs || [];
+let totalVND = existingVisit.totalVND || 0;
+
+if (drugNames && Array.isArray(drugNames) && drugNames.length > 0) {
+  drugsWithPrice = [];
+  totalVND = 0;
+  for (const name of drugNames) {
+    const result = await getDrugPriceFromDAV(name);
+    const priceVND = result?.giaBanBuonDuKien || 0;
+    const tenThuoc = result?.tenThuoc || name;
+    drugsWithPrice.push({ drugName: tenThuoc, priceVND });
+    totalVND += priceVND;
+    console.log(`✅ ${tenThuoc}: ${priceVND.toLocaleString('vi-VN')}đ`);
+  }
+}
+
 
     let ipfsHash = existingVisit.ipfsHash || "";
     let ipfsUrl = ipfsHash ? getIPFSGatewayUrl(ipfsHash) : "";
@@ -210,6 +253,9 @@ exports.updateVisit = async (req, res) => {
         ...(note              !== undefined && { note }),
         ...(hospitalName      !== undefined && { hospitalName }),
         ...(isCompletingNow   && { ipfsHash }), // ✅ chỉ ghi ipfsHash khi vừa hoàn thành
+        ...(isCompletingNow   && { ipfsHash }),
+        ...(drugsWithPrice.length > 0 && { drugs: drugsWithPrice, totalVND }),
+        
       },
       { new: true }
     );
@@ -233,23 +279,28 @@ exports.updateVisit = async (req, res) => {
 
         if (patientUser && patientUser.walletAddress) {
           const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
-          const defaultAmount = 0.002;
+const ETH_RATE = 80_000_000;
+const amountETH = totalVND > 0
+  ? parseFloat((totalVND / ETH_RATE).toFixed(6))
+  : 0.001;
 
-          const autoInvoice = new Invoice({
-            invoiceId: generatedInvoiceId,
-            amount: defaultAmount,
-            patientWallet: patientUser.walletAddress,
-            paymentStatus: 'pending',
-            createdAt: new Date()
-          });
-          await autoInvoice.save();
+const autoInvoice = new Invoice({
+  invoiceId: generatedInvoiceId,
+  amount: amountETH,
+  patientWallet: patientUser.walletAddress,
+  paymentStatus: 'pending',
+  items: drugsWithPrice,
+  totalVND,
+});
+await autoInvoice.save();
 
-          const paymentContract = getContractInstance('payment');
-          const amountWei = ethers.parseEther(defaultAmount.toString());
-          const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
-          await paymentTx.wait();
+const paymentContract = getContractInstance('payment');
+const amountWei = ethers.parseEther(amountETH.toString());
+const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
+await paymentTx.wait();
 
-          console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientUser.walletAddress}`);
+console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${totalVND.toLocaleString('vi-VN')}đ | ${amountETH} ETH`);
+
         } else {
           console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
         }
