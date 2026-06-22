@@ -242,13 +242,66 @@ export default function PatientDashboard() {
     setInvoiceSuccess("⏳ Giao dịch đang được xử lý trên mạng lưới...");
 
     // ... (Các bước đợi receipt phía sau giữ nguyên)
+    let confirmed = false;
+    let receipt = null;
 
-  } catch (err) {
-    setInvoiceError(err.message || "Giao dịch thất bại");
-  } finally {
-    setPayingId(null);
-  }
-};
+    for (let i = 0; i < 40; i++) {
+      await new Promise(r => setTimeout(r, 3000));
+      try {
+        receipt = await window.ethereum.request({
+          method: "eth_getTransactionReceipt",
+          params: [txHash]
+        });
+        if (receipt) {
+          confirmed = receipt.status === "0x1" || receipt.status === 1 || receipt.status === "1";
+          break;
+        }
+      } catch (err) {
+          console.error("Lỗi lấy receipt ngầm:", err);
+        }
+      }
+
+    if (confirmed) {
+      setTxPending("");
+      if (receipt && (receipt.status === "0x0" || receipt.status === 0)) {
+        setInvoiceError("❌ Giao dịch thất bại trên Blockchain (Reverted)! Vui lòng kiểm tra lại thông tin hóa đơn.");
+      } else {
+        setInvoiceError("⚠️ Không nhận được phản hồi xác thực từ mạng lưới Sepolia.");
+      }
+      return;
+    }
+
+    // 6. GỌI API ĐỒNG BỘ CẬP NHẬT TRẠNG THÁI VỀ SERVER BACKEND
+      try {
+        const response = await axios.post(
+          `${BASE_URL}/invoices/payments`,
+          {
+            invoiceId: invoice.invoiceId,
+            txHash: txHash,
+            senderWallet: walletAddress
+          },
+          { headers }
+        );
+
+        if (response.data.success) {
+          setInvoiceSuccess("🎉 Thanh toán hóa đơn thành công và đồng bộ dữ liệu hoàn tất!");
+          setTxPending("");
+          await loadInvoices(); // Tải lại danh sách hóa đơn để chuyển sang chữ "Đã thanh toán"
+        } else {
+          setInvoiceError(`Hệ thống On-chain đã nhận tiền, nhưng lỗi đồng bộ database: ${response.data.message}`);
+        }
+      } catch (apiErr) {
+        console.error("Lỗi API kết nối Backend:", apiErr);
+        setInvoiceError("⚠️ Tiền đã chuyển thành công, nhưng Server Backend lỗi kết nối đồng bộ.");
+      }
+
+    } catch (err) {
+      setInvoiceError(err.message || "Giao dịch bị từ chối");
+    } finally {
+      setPayingId(null);
+    }
+  };
+
 
   const handleApproveRequest = async (request) => {
     setError("")
