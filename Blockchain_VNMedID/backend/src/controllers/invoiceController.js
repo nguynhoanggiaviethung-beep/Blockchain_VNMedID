@@ -64,11 +64,11 @@ exports.createInvoice = async (req, res) => {
 };
 
 // =========================================================================
-// 2. XỬ LÝ THANH TOÁN HÓA ĐƠN (Xác thực On-chain đồng bộ)
+// 2. XỬ LÝ THANH TOÁN HÓA ĐƠN (Xác thực On-chain đồng bộ - KHỚP FRONTEND)
 // =========================================================================
 exports.makePayment = async (req, res) => {
   try {
-    const { invoiceId, txHash } = req.body;
+    const { invoiceId, txHash, senderWallet } = req.body; // Thêm nhận diện ví người gửi từ frontend
 
     if (!invoiceId || !txHash) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập mã hóa đơn và mã giao dịch' });
@@ -82,8 +82,7 @@ exports.makePayment = async (req, res) => {
     try {
       const paymentContract = getContractInstance('payment');
       
-      // Thay vì gọi biến mapping `invoices(invoiceId)`, ta gọi hàm `getInvoice` chuẩn của Contract
-      // Hàm trả về Struct: [patientWallet, amount, paid]
+      // Lấy dữ liệu Struct: [patientWallet, amount, paid] tự Blockchain Sepolia
       const onChainData = await paymentContract.getInvoice(invoiceId);
       const isPaidOnChain = onChainData.paid || onChainData[2]; 
 
@@ -102,18 +101,23 @@ exports.makePayment = async (req, res) => {
       });
     }
 
-    // Nếu on-chain xác thực đúng là đã thanh toán (`paid = true`) -> Cập nhật DB
+    // Nếu on-chain xác thực đúng là đã thanh toán -> Tiến hành cập nhật DB
     invoice.txHash = txHash;
     invoice.paymentStatus = 'paid';
-    if (req.body.patientWallet) {
-      invoice.patientWallet = req.body.patientWallet;
+    
+    // Cập nhật ví thực tế thanh toán (chuyển về dạng lowercase để đồng bộ)
+    if (senderWallet) {
+      invoice.patientWallet = senderWallet.toLowerCase();
+    } else if (req.body.patientWallet) {
+      invoice.patientWallet = req.body.patientWallet.toLowerCase();
     }
+    
     await invoice.save();
 
     return res.status(200).json({
       success: true,
       message: 'Thanh toán thành công và đồng bộ dữ liệu hoàn tất!',
-      data: { paymentStatus: 'paid' }
+      data: { paymentStatus: 'paid', invoiceId }
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });

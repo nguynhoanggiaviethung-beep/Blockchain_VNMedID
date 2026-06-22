@@ -422,22 +422,39 @@ const completeVisit = async (req, res) => {
     }
 };
 
-// ==========================================
-// 7. TRUY VẤN DỮ LIỆU LỊCH SỬ TỪ CONTRACT (ON-CHAIN)
-// ==========================================
+// =========================================================================
+// 7. TRUY VẤN DỮ LIỆU LỊCH SỬ TỪ CONTRACT (Hỗ trợ tìm kiếm linh hoạt theo Ví/ID)
+// =========================================================================
 const getOnChainRecord = async (req, res) => {
     try {
-        const { patientAddress } = req.params;
+        const { patientAddress } = req.params; // Nhận vào từ URL định tuyến
+        const db = mongoose.connection.db;
 
         if (!patientAddress) {
             return res.status(400).json({ success: false, message: "Thiếu mã định danh hoặc địa chỉ ví bệnh nhân!" });
+        }
+
+        // Khởi tạo key mặc định phục vụ truy vấn Smart Contract là tham số truyền vào
+        let targetContractKey = patientAddress;
+
+        // Bẫy lỗi bảo mật: Nếu frontend truyền vào địa chỉ ví dạng '0x...', 
+        // ta tìm xem ID tương ứng trong database để map với chuỗi key lúc lưu On-chain bằng completeVisit
+        if (patientAddress.startsWith("0x")) {
+            const linkedUser = await db.collection('users').findOne({
+                walletAddress: { $regex: new RegExp(`^${patientAddress}$`, 'i') }
+            });
+            if (linkedUser) {
+                targetContractKey = String(linkedUser._id); // Chuyển đổi ngược lại thành mã chuỗi MongoDB ID giống cơ chế lưu
+                console.log(`[Đồng bộ On-chain] Đã map địa chỉ ví sang chuỗi định danh gốc: ${targetContractKey}`);
+            }
         }
 
         const medicalContract = getContractInstance('medicalRecord');
         let records = [];
 
         try {
-            records = await medicalContract.getPatientRecord(patientAddress);
+            // Truy vấn trực tiếp bằng chuỗi key định danh khớp hoàn toàn với cấu trúc Blockchain
+            records = await medicalContract.getPatientRecord(targetContractKey);
         } catch (contractError) {
             console.warn(`⚠️ Bệnh nhân chưa có hồ sơ On-chain:`, contractError.message);
             return res.status(200).json({
@@ -455,7 +472,7 @@ const getOnChainRecord = async (req, res) => {
                 stt: index + 1,
                 hash: hashValue,
                 doctorWallet: doctorWallet,
-                time: new Date(timestamp * 1000).toLocaleString('vi-VN')
+                time: new Date(timestamp * 1000).toLocaleString('vi-VN') // Trả ra đúng định dạng hiển thị bảng xanh lá
             };
         });
 
