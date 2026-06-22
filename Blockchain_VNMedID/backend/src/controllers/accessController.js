@@ -6,7 +6,7 @@ const { getAccessContract } = require('../utils/blockchain');
 // ✅ Thời hạn cấp quyền mỗi lần duyệt — 1 giờ
 const ACCESS_DURATION_MS = 60 * 60 * 1000;
 
-// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN (Phiên bản tự động nhận diện ví thông minh)
+// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN (Đã sửa đổi trỏ đúng vào collection 'users')
 exports.requestAccess = async (req, res) => {
   try {
     const { doctorId, patientId, patientWallet, doctorWallet, doctorName } = req.body; 
@@ -18,15 +18,15 @@ exports.requestAccess = async (req, res) => {
     const mongoose = require("mongoose");
     const db = mongoose.connection.db;
 
-    // === XỬ LÝ VÍ BÁC SĨ ===
-    // Ưu tiên 1: Lấy ví từ req.user (do middleware xacThucToken cung cấp khi giải mã JWT)
-    // Ưu tiên 2: Lấy ví do frontend truyền trực tiếp trong body
-    let finalDoctorWallet = (req.user && (req.user.walletAddress || req.user.wallet)) || doctorWallet;
-    let finalDoctorName = (req.user && req.user.name) || doctorName || "Bác sĩ hệ thống";
+    // === 1. XỬ LÝ TRÍCH XUẤT VÍ BÁC SĨ ===
+    // Ưu tiên 1: Lấy ví thực tế từ token đăng nhập hoặc body frontend gửi lên
+    let finalDoctorWallet = doctorWallet || (req.user && (req.user.walletAddress || req.user.wallet));
+    let finalDoctorName = doctorName || (req.user && (req.user.fullName || req.user.name)) || "Bác sĩ hệ thống";
 
-    // Ưu tiên 3: Nếu vẫn trống, truy vấn tìm trong DB bằng doctorId
+    // Ưu tiên 2: Nếu vẫn trống ví, lục tìm trong collection "users" theo ID
     if (!finalDoctorWallet && doctorId) {
-      const doctor = await db.collection("doctors").findOne({ 
+      // 🎯 ĐÃ ĐỔI: Tìm kiếm bên collection "users" thay vì "doctors"
+      const user = await db.collection("users").findOne({ 
         $or: [
           { _id: mongoose.Types.ObjectId.isValid(doctorId) ? new mongoose.Types.ObjectId(doctorId) : null },
           { id: doctorId },
@@ -34,13 +34,14 @@ exports.requestAccess = async (req, res) => {
         ].filter(Boolean)
       });
       
-      if (doctor) {
-        finalDoctorWallet = doctor.walletAddress || doctor.wallet || doctor.address;
-        finalDoctorName = doctor.name || finalDoctorName;
+      if (user) {
+        // Áp dụng chính xác tên các trường fullName và walletAddress từ cấu trúc tài khoản của bạn
+        finalDoctorWallet = user.walletAddress || user.wallet || user.address;
+        finalDoctorName = user.fullName || user.name || finalDoctorName;
       }
     }
 
-    // === XỬ LÝ VÍ BỆNH NHÂN ===
+    // === 2. XỬ LÝ TRÍCH XUẤT VÍ BỆNH NHÂN ===
     let finalPatientWallet = patientWallet;
     if (!finalPatientWallet) {
       const patient = await db.collection("patients").findOne({ 
@@ -55,11 +56,12 @@ exports.requestAccess = async (req, res) => {
       }
     }
 
-    // Kiểm tra an toàn cuối cùng trước khi ghi nhận
+    // === 3. KIỂM TRA BẢO VỆ CUỐI CÙNG ===
     if (!finalDoctorWallet || !finalPatientWallet) {
       return res.status(400).json({ 
         success: false, 
-        message: `Dữ liệu không đủ để tạo giao dịch Web3! Ví bác sĩ: ${finalDoctorWallet}, Ví bệnh nhân: ${finalPatientWallet}. Vui lòng kiểm tra lại tài khoản trong DB.` 
+        message: `Dữ liệu không đủ để tạo giao dịch Web3! Ví bác sĩ: ${finalDoctorWallet}, Ví bệnh nhân: ${finalPatientWallet}.`,
+        advice: "Hãy đảm bảo tài khoản bác sĩ trong bảng 'users' đã được cập nhật trường 'walletAddress'!"
       });
     }
 
@@ -72,7 +74,7 @@ exports.requestAccess = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Yêu cầu của bạn đang chờ bệnh nhân duyệt rồi!' });
     }
 
-    // Kiểm tra quyền còn hạn
+    // Kiểm tra quyền còn hạn (1 giờ)
     const activeGrant = await AccessRequest.findOne({
       patientId,
       doctorWallet: cleanDoctorWallet,
