@@ -233,7 +233,8 @@ export default function PatientDashboard() {
         from: walletAddress,
         to: PAYMENT_CONTRACT_ADDRESS,
         value: amountHex, // msg.value bắt buộc phải bằng inv.amount
-        data: finalCalldata
+        data: finalCalldata,
+        gas: "0x186A0"
       }]
     });
 
