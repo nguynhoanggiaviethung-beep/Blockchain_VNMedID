@@ -3,9 +3,10 @@
 const Invoice = require('../models/Invoice');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
+const mongoose = require('mongoose'); // Đưa lên đầu file để mọi hàm đều dùng được
 
 // =========================================================================
-// 1. TẠO HÓA ĐƠN MỚI (Hỗ trợ cả tạo thủ công lẫn nhận mảng items thuốc)
+// 1. TẠO HÓA ĐƠN MỚI (Đảm bảo đồng bộ tuyệt đối với Blockchain)
 // =========================================================================
 exports.createInvoice = async (req, res) => {
   try {
@@ -20,31 +21,40 @@ exports.createInvoice = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Mã hóa đơn đã tồn tại!' });
     }
 
-    // Đã bổ sung lưu kèm danh sách items thuốc và tổng VND nếu có truyền lên
+    // 🛑 BƯỚC KHÓA: Phải đẩy lên Blockchain THÀNH CÔNG trước khi lưu Database
+    let txHash = null;
+    try {
+      const paymentContract = getContractInstance('payment');
+      const amountWei = ethers.parseEther(amount.toString());
+      
+      // Gọi Smart Contract để tạo hóa đơn On-chain
+      const tx = await paymentContract.createInvoice(invoiceId, patientWallet, amountWei);
+      await tx.wait(); // Đợi block được đào xong trên Sepolia
+      txHash = tx.hash;
+    } catch (bcError) {
+      console.error('❌ Lỗi đồng bộ blockchain thất bại:', bcError.message);
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Không thể tạo hóa đơn trên Blockchain mạng Sepolia. Vui lòng kiểm tra số dư ví Admin hoặc Gas!',
+        error: bcError.message 
+      });
+    }
+
+    // Nếu On-chain thành công mới tiến hành lưu MongoDB
     const invoice = new Invoice({ 
       invoiceId, 
       amount, 
       patientWallet, 
       paymentStatus: 'pending',
       items: items || [],
-      totalVND: totalVND || 0
+      totalVND: totalVND || 0,
+      txHash: txHash // Lưu lại luôn txHash tạo hóa đơn ban đầu
     });
     await invoice.save();
 
-    let txHash = null;
-    try {
-      const paymentContract = getContractInstance('payment');
-      const amountWei = ethers.parseEther(amount.toString());
-      const tx = await paymentContract.createInvoice(invoiceId, patientWallet, amountWei);
-      await tx.wait();
-      txHash = tx.hash;
-    } catch (bcError) {
-      console.error('Lỗi đồng bộ blockchain:', bcError.message);
-    }
-
     return res.status(201).json({
       success: true,
-      message: 'Tạo hóa đơn thành công!',
+      message: 'Tạo hóa đơn thành công và đã đồng bộ lên Blockchain!',
       data: { invoiceId: invoice.invoiceId, txHash }
     });
     
@@ -54,7 +64,7 @@ exports.createInvoice = async (req, res) => {
 };
 
 // =========================================================================
-// 2. XỬ LÝ THANH TOÁN HÓA ĐƠN (Xác thực On-chain)
+// 2. XỬ LÝ THANH TOÁN HÓA ĐƠN (Xác thực On-chain đồng bộ)
 // =========================================================================
 exports.makePayment = async (req, res) => {
   try {
@@ -66,37 +76,43 @@ exports.makePayment = async (req, res) => {
 
     const invoice = await Invoice.findOne({ invoiceId });
     if (!invoice) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy hóa đơn!' });
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hóa đơn dưới Database!' });
     }
-
-    invoice.txHash = txHash;
-    invoice.paymentStatus = 'paid';
-
-    if (req.body.patientWallet) {
-      invoice.patientWallet = req.body.patientWallet;
-    }
-
-    await invoice.save();
 
     try {
       const paymentContract = getContractInstance('payment');
-      const onChainData = await paymentContract.invoices(invoiceId);
-      const isPaidOnChain = onChainData[2];
+      
+      // Thay vì gọi biến mapping `invoices(invoiceId)`, ta gọi hàm `getInvoice` chuẩn của Contract
+      // Hàm trả về Struct: [patientWallet, amount, paid]
+      const onChainData = await paymentContract.getInvoice(invoiceId);
+      const isPaidOnChain = onChainData.paid || onChainData[2]; 
 
       if (!isPaidOnChain) {
         return res.status(400).json({ 
           success: false, 
-          message: 'Hóa đơn chưa được cập nhật trạng thái PAID trên Smart Contract!' 
+          message: 'Giao dịch MetaMask thất bại hoặc trạng thái PAID chưa được cập nhật on-chain!' 
         });
       }
     } catch (bcError) {
       console.error('❌ Lỗi xác thực Blockchain:', bcError.message);
-      return res.status(500).json({ success: false, message: 'Hệ thống không thể kết nối Blockchain Sepolia!', error: bcError.message });
+      return res.status(500).json({ 
+        success: false, 
+        message: 'Server Backend lỗi kết nối hoặc không thể đồng bộ với mạng Sepolia!', 
+        error: bcError.message 
+      });
     }
+
+    // Nếu on-chain xác thực đúng là đã thanh toán (`paid = true`) -> Cập nhật DB
+    invoice.txHash = txHash;
+    invoice.paymentStatus = 'paid';
+    if (req.body.patientWallet) {
+      invoice.patientWallet = req.body.patientWallet;
+    }
+    await invoice.save();
 
     return res.status(200).json({
       success: true,
-      message: 'Thanh toán thành công!',
+      message: 'Thanh toán thành công và đồng bộ dữ liệu hoàn tất!',
       data: { paymentStatus: 'paid' }
     });
   } catch (error) {
@@ -105,20 +121,17 @@ exports.makePayment = async (req, res) => {
 };
 
 // =========================================================================
-// 3. LẤY TOÀN BỘ HÓA ĐƠN CỦA TÔI (Trả về danh sách có kèm items thuốc)
+// 3. LẤY TOÀN BỘ HÓA ĐƠN CỦA TÔI
 // =========================================================================
 exports.getMyInvoices = async (req, res) => {
   try {
-    const mongoose = require('mongoose');
     const db = mongoose.connection.db;
-
     const userId = req.userId || req.user?.userId || req.user?.id;
     let patientWallet = null;
 
     if (userId) {
       try {
-        let objId;
-        try { objId = new mongoose.Types.ObjectId(userId); } catch(_) { objId = userId; }
+        let objId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
         const user = await db.collection('users').findOne({ _id: objId });
         patientWallet = user?.walletAddress || null;
       } catch {}
@@ -132,7 +145,6 @@ exports.getMyInvoices = async (req, res) => {
       return res.json({ success: true, data: [], message: 'Chưa liên kết ví MetaMask' });
     }
 
-    // Lấy hóa đơn sắp xếp mới nhất, tự động lấy thêm mảng items và totalVND vừa thêm
     const invoices = await Invoice.find({
       patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
     }).sort({ createdAt: -1 });
@@ -144,16 +156,16 @@ exports.getMyInvoices = async (req, res) => {
 };
 
 // =========================================================================
-// 4. BỔ SUNG: LẤY CHI TIẾT 1 HÓA ĐƠN THEO ID (Phục vụ Frontend xem Popup)
+// 4. LẤY CHI TIẾT 1 HÓA ĐƠN THEO ID (Đã sửa lỗi khai báo mongoose)
 // =========================================================================
 exports.getInvoiceById = async (req, res) => {
   try {
-    const { id } = req.params; // Nhận invoiceId hoặc _id từ URL
+    const { id } = req.params; 
     
     const invoice = await Invoice.findOne({
       $or: [
         { invoiceId: id },
-        { _id: mongoose.isValidObjectId(id) ? new mongoose.Types.ObjectId(id) : null }
+        { _id: mongoose.Types.ObjectId.isValid(id) ? new mongoose.Types.ObjectId(id) : null }
       ]
     });
 
