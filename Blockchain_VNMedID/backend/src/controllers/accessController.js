@@ -6,24 +6,65 @@ const { getAccessContract } = require('../utils/blockchain');
 // ✅ Thời hạn cấp quyền mỗi lần duyệt — 1 giờ
 const ACCESS_DURATION_MS = 60 * 60 * 1000;
 
-// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN
+// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN (Phiên bản tự động bù đắp dữ liệu thiếu từ Frontend)
 exports.requestAccess = async (req, res) => {
   try {
-    const { patientId, patientWallet, doctorWallet, doctorName } = req.body;
-    if (!patientId || !patientWallet || !doctorWallet || !doctorName) {
-      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ thông tin yêu cầu!' });
+    // Frontend có thể gửi { doctorId, patientId } hoặc đầy đủ thông tin
+    const { doctorId, patientId, patientWallet, doctorWallet, doctorName } = req.body; 
+
+    if (!patientId) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin patientId!' });
     }
 
-    const cleanDoctorWallet = doctorWallet.toLowerCase();
-    const cleanPatientWallet = patientWallet.toLowerCase();
+    const mongoose = require("mongoose");
+    const db = mongoose.connection.db;
 
-    // Kiểm tra yêu cầu trùng ở trạng thái pending
+    // 1. Tự động điền thông tin Bác sĩ nếu Frontend chỉ gửi doctorId
+    let finalDoctorWallet = doctorWallet;
+    let finalDoctorName = doctorName;
+
+    if (doctorId) {
+      const doctor = await db.collection("doctors").findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
+      if (!doctor) {
+        return res.status(444).json({ success: false, message: "Không tìm thấy thông tin bác sĩ dựa trên doctorId!" });
+      }
+      finalDoctorWallet = doctor.walletAddress || doctor.wallet;
+      finalDoctorName = doctor.name || "Bác sĩ hệ thống";
+    }
+
+    // 2. Tự động điền thông tin ví Bệnh nhân nếu Frontend không truyền lên
+    let finalPatientWallet = patientWallet;
+    if (!finalPatientWallet) {
+      const patient = await db.collection("patients").findOne({ 
+        $or: [
+          { _id: mongoose.Types.ObjectId.isValid(patientId) ? new mongoose.Types.ObjectId(patientId) : null },
+          { patientId: patientId },
+          { id: patientId }
+        ].filter(Boolean)
+      });
+      if (patient) {
+        finalPatientWallet = patient.walletAddress || patient.wallet;
+      }
+    }
+
+    // Kiểm tra lại lần cuối xem đã đủ thông tin cốt lõi chưa
+    if (!finalDoctorWallet || !finalPatientWallet) {
+      return res.status(400).json({ 
+        success: false, 
+        message: `Dữ liệu không đủ để tạo giao dịch Web3! Ví bác sĩ: ${finalDoctorWallet}, Ví bệnh nhân: ${finalPatientWallet}` 
+      });
+    }
+
+    const cleanDoctorWallet = finalDoctorWallet.toLowerCase();
+    const cleanPatientWallet = finalPatientWallet.toLowerCase();
+
+    // 3. Kiểm tra yêu cầu trùng ở trạng thái pending
     const existing = await AccessRequest.findOne({ patientId, doctorWallet: cleanDoctorWallet, status: 'pending' });
     if (existing) {
       return res.status(400).json({ success: false, message: 'Yêu cầu của bạn đang chờ bệnh nhân duyệt rồi!' });
     }
 
-    // Kiểm tra quyền còn hạn
+    // 4. Kiểm tra quyền còn hạn
     const activeGrant = await AccessRequest.findOne({
       patientId,
       doctorWallet: cleanDoctorWallet,
@@ -37,16 +78,18 @@ exports.requestAccess = async (req, res) => {
       });
     }
 
+    // 5. Lưu vào database
     const newRequest = new AccessRequest({ 
       patientId, 
       patientWallet: cleanPatientWallet, 
       doctorWallet: cleanDoctorWallet, 
-      doctorName 
+      doctorName: finalDoctorName 
     });
     await newRequest.save();
 
     return res.json({ success: true, message: 'Đã gửi yêu cầu xin cấp quyền tới bệnh nhân!' });
   } catch (err) {
+    console.error("❌ Lỗi API xin quyền:", err);
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 };
