@@ -20,6 +20,8 @@ const visitSchema = new mongoose.Schema({
   // ✅ THÊM MỚI: Bác sĩ kê tên thuốc → hệ thống tự tra DAV lấy giá
   drugs: [{
     drugName: { type: String, default: "" },  // Tên thuốc từ DAV
+    quantity: { type: Number, default: 1 },
+    
     priceVND:  { type: Number, default: 0 },  // Giá lấy từ DAV
   }],
   totalVND: { type: Number, default: 0 },     // Tổng tiền VND tự tính

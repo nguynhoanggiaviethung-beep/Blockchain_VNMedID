@@ -175,7 +175,7 @@ exports.updateVisit = async (req, res) => {
     const { status, doctorId, doctorName, shiftId,
   diagnosis, chanDoanChuyenMon, huongDieuTri,
   prescription, note, hospitalName,
-  drugNames  // ✅ THÊM
+  prescribedDrugs  // ✅ THÊM
 } = req.body;
 
 
@@ -190,11 +190,11 @@ exports.updateVisit = async (req, res) => {
 let drugsWithPrice = existingVisit.drugs || [];
 let totalVND = existingVisit.totalVND || 0;
 
-if (drugNames && Array.isArray(drugNames) && drugNames.length > 0) {
+if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length > 0) {
   drugsWithPrice = [];
   totalVND = 0;
-  for (const name of drugNames) {
-    const result = await getDrugPriceFromDAV(name);
+  for (const drug of prescribedDrugs) {
+    const result = await getDrugPriceFromDAV(drug.drugName);
     const priceVND = result?.giaBanBuonDuKien || 0;
     const tenThuoc = result?.tenThuoc || name;
     drugsWithPrice.push({ drugName: tenThuoc, priceVND });
