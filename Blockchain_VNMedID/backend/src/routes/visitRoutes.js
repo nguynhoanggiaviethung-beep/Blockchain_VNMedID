@@ -52,5 +52,12 @@ router.delete(
   phanQuyen('doctor', 'admin'),
   visitController.deleteVisit
 );
+// Admin phân công bác sĩ vào lượt khám
+router.put(
+  '/assign/:visitId',
+  xacThucToken,
+  phanQuyen('admin'),
+  visitController.assignDoctor
+);
 
 module.exports = router;

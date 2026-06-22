@@ -1,4 +1,6 @@
 const Visit = require('../models/Visit');
+const Shift = require('../models/Shift');
+
 const Invoice = require('../models/Invoice');
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
@@ -31,14 +33,33 @@ const getDrugPriceFromDAV = async (drugName) => {
 };
 
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
+// ─── BỆNH NHÂN ĐẶT LỊCH (TỰ ĐỘNG GÁN BÁC SĨ) ──────────────────────────────
 exports.bookAppointment = async (req, res) => {
   try {
-    const { patientId, patientName, specialty, appointmentDate, trieuChungLamSang, hospitalName } = req.body;
+    // Lưu ý: Yêu cầu Frontend gửi thêm trường 'shift' (morning hoặc afternoon)
+    const { patientId, patientName, specialty, appointmentDate, shift, trieuChungLamSang, hospitalName } = req.body;
 
-    if (!patientId || !specialty || !appointmentDate || !hospitalName) {
-      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám và bệnh viện!' });
+    if (!patientId || !specialty || !appointmentDate || !hospitalName || !shift) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám, ca khám và bệnh viện!' });
     }
 
+    // 1. TỰ ĐỘNG TÌM BÁC SĨ ĐANG TRỰC
+    // Máy sẽ dò xem ngày hôm đó, ca đó, chuyên khoa đó có bác sĩ nào đang có lịch active không
+    const activeShift = await Shift.findOne({
+        date: appointmentDate,
+        shift: shift,
+        specialty: specialty,
+        status: 'active'
+    });
+
+    if (!activeShift) {
+        return res.status(404).json({ 
+            success: false, 
+            message: `Rất tiếc, không có bác sĩ chuyên khoa ${specialty} trực vào ca này ngày ${appointmentDate}. Vui lòng chọn khung giờ khác!` 
+        });
+    }
+
+    // 2. GÁN LUÔN BÁC SĨ VÀO HỒ SƠ & LƯU LẠI
     const visit = new Visit({
       patientId,
       patientName: patientName || "",
@@ -46,17 +67,27 @@ exports.bookAppointment = async (req, res) => {
       appointmentDate,
       trieuChungLamSang: trieuChungLamSang || "",
       hospitalName,
-      status: "pending"
+      doctorId: activeShift.doctorId,       // 👈 Máy tự gán ID bác sĩ tìm được
+      doctorName: activeShift.doctorName,   // 👈 Máy tự gán Tên bác sĩ
+      shiftId: activeShift._id,             // 👈 Gắn chốt luôn vào ca trực đó
+      status: "examining"                   // 👈 Đổi trạng thái bỏ qua bước pending của admin
     });
+    
     await visit.save();
 
-    return res.status(201).json({ success: true, data: visit });
+    return res.status(201).json({ 
+        success: true, 
+        message: 'Đặt lịch và tự động phân công bác sĩ thành công!',
+        data: visit 
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
 
+
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ THEO BỆNH VIỆN CÔNG TÁC ──────────────────────
+// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
@@ -64,22 +95,16 @@ exports.getDoctorPendingVisits = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    const db = mongoose.connection.db;
-    const doctorInfo = await db.collection("doctors").findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
-    if (!doctorInfo || !doctorInfo.hospitalName) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin bệnh viện của bác sĩ này!' });
-    }
-
-    const currentHospital = doctorInfo.hospitalName;
-
+    // Lấy danh sách lượt khám ĐÃ ĐƯỢC GÁN cho bác sĩ này (trạng thái examining)
     const pendingVisits = await Visit.find({
-      hospitalName: currentHospital,
-      status: "pending"
-    }).sort({ createdAt: 1 });
+      doctorId: doctorId,
+      status: "examining" 
+    })
+    .populate('shiftId', 'shift room date') // Lấy thêm thông tin phòng/ca để hiển thị
+    .sort({ createdAt: 1 });
 
     return res.json({
       success: true,
-      hospitalName: currentHospital,
       count: pendingVisits.length,
       data: pendingVisits
     });
@@ -325,6 +350,35 @@ exports.deleteVisit = async (req, res) => {
     }
 
     return res.json({ success: true, message: 'Đã xóa lượt khám!' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
+// ─── ADMIN: PHÂN CÔNG BÁC SĨ VÀO LƯỢT KHÁM ────────────────────────────────
+exports.assignDoctor = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const { doctorId, doctorName, shiftId } = req.body;
+
+    const updatedVisit = await Visit.findByIdAndUpdate(
+      visitId,
+      { 
+        doctorId, 
+        doctorName, 
+        shiftId, 
+        status: "examining" 
+      },
+      { new: true }
+    )
+    // Cú pháp đặc biệt để lấy các key có dấu cách
+    .populate({ path: 'doctorId', select: { "Họ và tên": 1, "Chuyên Khoa": 1 } })
+    .populate('shiftId', 'shift room date');
+
+    if (!updatedVisit) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+    }
+
+    return res.json({ success: true, message: 'Phân công thành công', data: updatedVisit });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
