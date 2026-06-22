@@ -1,145 +1,150 @@
-// C:\NEW BLOCKCHAIN\Blockchain_VNMedID\backend\src\controllers\accessController.js
+// File: backend/src/controllers/accessController.js
+const { ethers } = require('ethers');
+const AccessRequest = require('../models/AccessRequest');
+const { getAccessContract } = require('../utils/blockchain');
 
-const mongoose = require("mongoose");
-const { getContractInstance } = require("../config/web3");
+// ✅ Thời hạn cấp quyền mỗi lần duyệt — 1 giờ
+const ACCESS_DURATION_MS = 60 * 60 * 1000;
 
-// =========================================================================
-// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN (Lưu vào DB để trang Bệnh nhân nhận được)
-// =========================================================================
+// 1. BÁC SĨ GỬI YÊU CẦU CẤP QUYỀN
 exports.requestAccess = async (req, res) => {
   try {
-    const { doctorId, patientId } = req.body; // patientId có thể là ID trong Mongo hoặc mã bệnh nhân
-
-    if (!doctorId || !patientId) {
-      return res.status(400).json({ success: false, message: "Thiếu doctorId hoặc patientId" });
+    const { patientId, patientWallet, doctorWallet, doctorName } = req.body;
+    if (!patientId || !patientWallet || !doctorWallet || !doctorName) {
+      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp đầy đủ thông tin yêu cầu!' });
     }
 
-    const db = mongoose.connection.db;
+    const cleanDoctorWallet = doctorWallet.toLowerCase();
+    const cleanPatientWallet = patientWallet.toLowerCase();
 
-    // Kiểm tra thông tin bác sĩ gửi yêu cầu
-    const doctor = await db.collection("doctors").findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
-    if (!doctor) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy thông tin bác sĩ" });
+    // Kiểm tra yêu cầu trùng ở trạng thái pending
+    const existing = await AccessRequest.findOne({ patientId, doctorWallet: cleanDoctorWallet, status: 'pending' });
+    if (existing) {
+      return res.status(400).json({ success: false, message: 'Yêu cầu của bạn đang chờ bệnh nhân duyệt rồi!' });
     }
 
-    // Kiểm tra xem yêu cầu này đã tồn tại chưa để tránh gửi trùng
-    const existingRequest = await db.collection("access_requests").findOne({
-      doctorId: new mongoose.Types.ObjectId(doctorId),
-      patientId: patientId,
-      status: "pending"
+    // Kiểm tra quyền còn hạn
+    const activeGrant = await AccessRequest.findOne({
+      patientId,
+      doctorWallet: cleanDoctorWallet,
+      status: 'approved',
+      expiresAt: { $gt: new Date() }
     });
-
-    if (existingRequest) {
-      return res.status(400).json({ success: false, message: "Yêu cầu cấp quyền đang trong trạng thái chờ bệnh nhân duyệt!" });
+    if (activeGrant) {
+      return res.status(400).json({
+        success: false,
+        message: `Bạn đang có quyền truy cập hồ sơ này đến ${activeGrant.expiresAt.toLocaleString('vi-VN')}!`
+      });
     }
 
-    // Lưu yêu cầu vào Database dưới dạng 'pending'
-    const newRequest = {
-      doctorId: new mongoose.Types.ObjectId(doctorId),
-      doctorName: doctor.name || "Bác sĩ hệ thống",
-      doctorWallet: doctor.walletAddress,
-      patientId: patientId,
-      status: "pending",
-      createdAt: new Date()
-    };
-
-    await db.collection("access_requests").insertOne(newRequest);
-
-    return res.status(201).json({
-      success: true,
-      message: "Đã gửi yêu cầu cấp quyền tới bệnh nhân thành công!",
-      data: newRequest
+    const newRequest = new AccessRequest({ 
+      patientId, 
+      patientWallet: cleanPatientWallet, 
+      doctorWallet: cleanDoctorWallet, 
+      doctorName 
     });
+    await newRequest.save();
 
-  } catch (error) {
-    console.error("❌ Lỗi khi tạo yêu cầu cấp quyền:", error);
-    return res.status(500).json({ success: false, message: error.message });
+    return res.json({ success: true, message: 'Đã gửi yêu cầu xin cấp quyền tới bệnh nhân!' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 };
 
-// =========================================================================
-// 2. BỆNH NHÂN LẤY DANH SÁCH YÊU CẦU ĐANG CHỜ (Hàm để trang bệnh nhân cập nhật dữ liệu)
-// =========================================================================
+// 2. BỆNH NHÂN LẤY DANH SÁCH YÊU CẦU CỦA CHÍNH HỌ
 exports.getPendingRequestsForPatient = async (req, res) => {
   try {
-    const { patientId } = req.params; // Lấy từ URL ví dụ: /api/access/pending/PAT-12345
-    const db = mongoose.connection.db;
+    const { patientId } = req.query; // Hoặc req.params tùy frontend gọi
+    const idToSearch = patientId || req.params.patientId;
+    
+    if (!idToSearch) {
+      return res.status(400).json({ success: false, message: 'Thiếu thông tin định danh patientId!' });
+    }
 
-    const requests = await db.collection("access_requests")
-      .find({ patientId: patientId, status: "pending" })
-      .sort({ createdAt: -1 })
-      .toArray();
-
-    return res.status(200).json({ success: true, data: requests });
-  } catch (error) {
-    return res.status(500).json({ success: false, message: error.message });
+    const list = await AccessRequest.find({ patientId: idToSearch }).sort({ createdAt: -1 });
+    return res.json({ success: true, data: list, accessDurationMs: ACCESS_DURATION_MS });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 };
 
-const { ethers } = require("ethers"); // Đảm bảo import thêm thư viện phục vụ giải mã chữ ký số
-
-// =========================================================================
-// 3. BỆNH NHÂN PHÊ DUYỆT QUYỀN TRUY CẬP BẰNG CHỮ KÝ SỐ METAMASK
-// =========================================================================
+// 3. BỆNH NHÂN PHÊ DUYỆT BẰNG CHỮ KÝ OFF-CHAIN + ĐẨY SMART CONTRACT
 exports.grantAccess = async (req, res) => {
   try {
-    const { requestId, signature } = req.body; // Nhận requestId và signature từ bệnh nhân
-
-    if (!requestId || !signature) {
-      return res.status(400).json({ success: false, message: "Thiếu mã yêu cầu (requestId) hoặc chữ ký số (signature)" });
+    const requestId = req.params.id || req.body.requestId;
+    const { signature } = req.body;
+    if (!signature) {
+      return res.status(400).json({ success: false, message: 'Thiếu chữ ký xác thực signature!' });
     }
 
-    const db = mongoose.connection.db;
-
-    // 1. Tìm thông tin yêu cầu trong DB
-    const accessRequest = await db.collection("access_requests").findOne({
-      _id: new mongoose.Types.ObjectId(requestId)
-    });
-
-    if (!accessRequest) {
-      return res.status(404).json({ success: false, message: "Không tìm thấy yêu cầu cấp quyền này!" });
+    const request = await AccessRequest.findById(requestId);
+    if (!request || request.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Yêu cầu không tồn tại hoặc đã xử lý trước đó.' });
     }
 
-    // 2. KIỂM TRA & XÁC THỰC CHỮ KÝ SỐ AN TOÀN
-    try {
-      // Nội dung thông điệp chuẩn đồng bộ với Frontend PatientDashboard
-      const msgParams = `Toi dong y cap quyen cho bac si ${accessRequest.doctorWallet.toLowerCase()} xem ho so cua toi (${accessRequest.patientId})`;
-      
-      // Khôi phục địa chỉ ví đã ký từ signature
-      const recoveredAddress = ethers.verifyMessage(msgParams, signature);
-      console.log(`[Chữ ký Web3] Địa chỉ ví khôi phục thành công từ MetaMask: ${recoveredAddress}`);
+    // Xác thực chữ ký số MetaMask khớp với ví bệnh nhân
+    const message = `Toi dong y cap quyen cho bac si ${request.doctorWallet.toLowerCase()} xem ho so cua toi (${request.patientId})`;
+    const recoveredAddress = ethers.verifyMessage(message, signature);
 
-      // Thực hiện đổi trạng thái trực tiếp bằng chữ ký hợp lệ (Phát triển mô hình bảo mật Hybrid)
-      // Không cần tốn phí Gas server đẩy lệnh, lưu trữ minh bạch dựa trên Proof of Signature
-    } catch (cryptoError) {
-      console.error("❌ Lỗi giải mã chữ ký MetaMask:", cryptoError.message);
-      return res.status(400).json({ success: false, message: "Chữ ký số không hợp lệ hoặc đã bị chỉnh sửa thông tin!" });
+    if (recoveredAddress.toLowerCase() !== request.patientWallet.toLowerCase()) {
+      return res.status(401).json({ success: false, message: 'Xác thực không hợp lệ! Chữ ký không trùng khớp.' });
     }
 
-    // 3. Cập nhật trạng thái trong MongoDB thành 'approved' kèm chữ ký số làm bằng chứng bằng chứng
-    await db.collection("access_requests").updateOne(
-      { _id: new mongoose.Types.ObjectId(requestId) },
-      { 
-        $set: { 
-          status: "approved", 
-          signatureProof: signature, 
-          approvedAt: new Date() 
-        } 
-      }
-    );
+    // Tương tác Smart Contract
+    const contract = getAccessContract();
+    const tx = await contract.grantAccess(request.patientId, request.doctorWallet);
+    await tx.wait();
 
-    return res.status(200).json({
+    // Cập nhật gia hạn 1 giờ
+    const now = new Date();
+    request.status = 'approved';
+    request.txHash = tx.hash;
+    request.approvedAt = now;
+    request.expiresAt = new Date(now.getTime() + ACCESS_DURATION_MS);
+    await request.save();
+
+    return res.json({
       success: true,
-      message: "Bạn đã phê duyệt quyền truy cập cho bác sĩ thành công bằng chữ ký điện tử!",
-      data: {
-        status: "approved",
-        doctorWallet: accessRequest.doctorWallet,
-        patientId: accessRequest.patientId
-      }
+      message: `Cấp quyền thành công! Quyền sẽ tự động hết hạn sau 60 phút.`,
+      data: { txHash: tx.hash, expiresAt: request.expiresAt }
     });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi Blockchain hoặc chữ ký: ' + err.message });
+  }
+};
 
-  } catch (error) {
-    console.error("❌ Lỗi xử lý cấp quyền:", error);
-    return res.status(500).json({ success: false, message: error.message });
+// 4. BỆNH NHÂN TỪ CHỐI YÊU CẦU
+exports.rejectAccess = async (req, res) => {
+  try {
+    const requestId = req.params.id || req.body.requestId;
+    const request = await AccessRequest.findById(requestId);
+    if (!request || request.status !== 'pending') {
+      return res.status(400).json({ success: false, message: 'Yêu cầu không tồn tại hoặc đã xử lý.' });
+    }
+    request.status = 'rejected';
+    await request.save();
+    return res.json({ success: true, message: 'Đã từ chối yêu cầu truy cập.' });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
+  }
+};
+
+// 5. BÁC SĨ XEM QUYỀN CÒN HẠN
+exports.getActiveRequestsForDoctor = async (req, res) => {
+  try {
+    const { doctorWallet } = req.query;
+    if (!doctorWallet) {
+      return res.status(400).json({ success: false, message: 'Thiếu doctorWallet!' });
+    }
+
+    const activeList = await AccessRequest.find({
+      doctorWallet: { $regex: new RegExp(`^${doctorWallet}$`, 'i') },
+      status: 'approved',
+      expiresAt: { $gt: new Date() }
+    }).sort({ approvedAt: -1 });
+
+    return res.json({ success: true, data: activeList });
+  } catch (err) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 };
