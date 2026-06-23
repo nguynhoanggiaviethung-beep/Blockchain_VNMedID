@@ -73,7 +73,8 @@ export default function AdminSchedule() {
     if (filterDoctor) params.doctorId = filterDoctor
     if (filterDate) params.date = filterDate
     if (filterShift) params.shift = filterShift
-    axios.get(`${BASE_URL}/schedules`, {
+    axios.get(`${BASE_URL}/shifts`, {
+
       headers: { Authorization: `Bearer ${token}` }, params
     })
     .then(res => setSchedules(res.data?.data?.schedules || res.data?.data || []))
@@ -142,7 +143,8 @@ export default function AdminSchedule() {
 
     // TRƯỜNG HỢP 2: TẠO LẺ CHO 1 BÁC SĨ NHƯ CŨ
     try {
-      await axios.post(`${BASE_URL}/schedules`, createForm, {
+      await axios.post(`${BASE_URL}/shifts`, createForm, {
+        
         headers: { Authorization: `Bearer ${token}` }
       })
       setShowCreate(false)
@@ -169,7 +171,7 @@ export default function AdminSchedule() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await axios.put(`${BASE_URL}/schedules/${editTarget}`, editForm, {
+      await axios.put(`${BASE_URL}/shifts/${editTarget}`, editForm, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setEditTarget(null)
@@ -181,7 +183,8 @@ export default function AdminSchedule() {
 
   const handleDelete = async (id) => {
     try {
-      await axios.delete(`${BASE_URL}/schedules/${id}`, {
+      await axios.delete(`${BASE_URL}/shifts/${id}`, {
+      
         headers: { Authorization: `Bearer ${token}` }
       })
       setConfirmDelete(null)
