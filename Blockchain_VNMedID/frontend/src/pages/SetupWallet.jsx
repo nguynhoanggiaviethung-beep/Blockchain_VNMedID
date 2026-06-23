@@ -3,7 +3,7 @@ import { useNavigate } from "react-router-dom";
 import axios from "axios";
 
 const api = axios.create({
-  baseURL: "https://blockchainvnmedid-production.up.railway.app/api/v1",
+  baseURL: "https://blockchain-vnmedid.onrender.com/api/v1",
 });
 
 const PRIMARY = "#0A2D6E";

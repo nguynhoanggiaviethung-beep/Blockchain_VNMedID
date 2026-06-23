@@ -16,7 +16,7 @@ const WHITE = "#FFFFFF";
 const GRAY_TEXT = "#5F6B7A";
 const BORDER = "#CBD5E1";
 
-const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1";
+const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1";
 const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
 
 const HOSPITALS = [

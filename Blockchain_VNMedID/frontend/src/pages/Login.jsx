@@ -6,7 +6,7 @@ import RegisterPatientForm from "./RegisterPatientForm";
 import { mapBackendToFrontend } from '../utils/doctorMapper.js';
 
 const api = axios.create({
-  baseURL: "https://blockchainvnmedid-production.up.railway.app/api/v1",
+  baseURL: "https://blockchain-vnmedid.onrender.com/api/v1",
 });
 
 const PRIMARY = "#0A2D6E";

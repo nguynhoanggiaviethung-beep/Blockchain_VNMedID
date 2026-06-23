@@ -13,7 +13,7 @@ export default function PatientBookingForm() {
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        const response = await axios.get("https://blockchainvnmedid-production.up.railway.app/api/v1/hospitals");
+        const response = await axios.get("https://blockchain-vnmedid.onrender.com/api/v1/hospitals");
         if (response.data?.success) {
           setHospitals(response.data.hospitals);
         }
@@ -47,7 +47,7 @@ export default function PatientBookingForm({ onBookingSuccess }) {
       const patientName = localStorage.getItem('fullName');
 
       const response = await axios.post(
-        'https://blockchainvnmedid-production.up.railway.app/api/v1/visits', // ✅ đúng endpoint
+        'https://blockchain-vnmedid.onrender.com/api/v1/visits', // ✅ đúng endpoint
         {
           patientId,
           patientName,

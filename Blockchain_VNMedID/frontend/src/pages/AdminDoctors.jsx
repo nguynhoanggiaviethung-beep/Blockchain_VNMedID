@@ -7,7 +7,7 @@ const PRIMARY_LIGHT = "#E6F1FB"
 const GRAY_TEXT = "#5F6B7A"
 const BORDER = "#CBD5E1"
 const ERROR = "#E24B4A"
-const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
+const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1"
 
 export default function AdminDoctors() {
   const token = localStorage.getItem("token")

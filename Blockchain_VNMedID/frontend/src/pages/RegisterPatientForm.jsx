@@ -34,7 +34,7 @@ const RegisterPatientForm = () => {
       setVerifying(true);
 
       const response = await axios.post(
-        "https://blockchainvnmedid-production.up.railway.app/api/v1/ekyc/verify-cccd",
+        "https://blockchain-vnmedid.onrender.com/api/v1/ekyc/verify-cccd",
         formData,
         {
           headers: {
@@ -91,7 +91,7 @@ const RegisterPatientForm = () => {
     setStatusMessage('');
     try {
       const response = await axios.post(
-        "https://blockchainvnmedid-production.up.railway.app/api/v1/auth/register-patient",
+        "https://blockchain-vnmedid.onrender.com/api/v1/auth/register-patient",
         { ...patientData, isVerified: verified }
       );
       if (response.data.success) {
