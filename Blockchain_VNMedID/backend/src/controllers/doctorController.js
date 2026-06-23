@@ -177,7 +177,7 @@ try {
  * mà không qua mongoose model khép kín, một số trường hợp Mongoose Model `Doctor.findById` 
  * sẽ bị rỗng nếu Schema cấu trúc không khớp. Đổi sang dùng db.collection('doctors') gốc để ăn chặt 100%.
  */
-exports.getDoctorById = async (req, res) => {
+const getDoctorById = async (req, res) => {
   try {
     const { id } = req.params;
 
