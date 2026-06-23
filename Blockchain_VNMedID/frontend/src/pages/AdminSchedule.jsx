@@ -14,7 +14,7 @@ const WARNING_LIGHT = "#FEF3C7"
 const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1"
 
 const SHIFT_MAP = {
-  morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,     bg: WARNING_LIGHT },
+  morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,    bg: WARNING_LIGHT },
   afternoon: { label: "Chiều",  time: "13:00 – 17:00", icon: "☀️",  color: PRIMARY_MED, bg: PRIMARY_LIGHT },
   evening:   { label: "Tối",    time: "17:30 – 21:00", icon: "🌙", color: "#7C3AED",   bg: "#F5F3FF" },
 }
@@ -56,6 +56,8 @@ export default function AdminSchedule() {
     maxPatients: 20, room: "", note: "", status: "active"
   })
   const [creating, setCreating] = useState(false)
+  // State theo dõi tiến trình tạo hàng loạt
+  const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 })
 
   // Modal sửa
   const [editTarget, setEditTarget] = useState(null)
@@ -89,12 +91,56 @@ export default function AdminSchedule() {
 
   useEffect(() => { fetchSchedules(); fetchDoctors() }, [])
 
+  // HÀM TẠO LỊCH ĐÃ ĐƯỢC TỐI ƯU HÓA HÀNG LOẠT
   const handleCreate = async () => {
     if (!createForm.doctorId || !createForm.date) {
       alert("Vui lòng chọn bác sĩ và ngày trực!")
       return
     }
+
     setCreating(true)
+
+    // TRƯỜNG HỢP 1: CHỌN TẠO CHO TẤT CẢ BÁC SĨ
+    if (createForm.doctorId === "ALL_DOCTORS") {
+      if (doctors.length === 0) {
+        alert("Không có bác sĩ nào trong danh sách để tạo lịch!")
+        setCreating(false)
+        return
+      }
+
+      setBulkProgress({ current: 0, total: doctors.length })
+      let successCount = 0;
+      let failCount = 0;
+
+      // Duyệt qua từng bác sĩ để gửi API tạo lịch
+      for (let i = 0; i < doctors.length; i++) {
+        const doc = doctors[i];
+        setBulkProgress({ current: i + 1, total: doctors.length })
+        
+        try {
+          const payload = {
+            ...createForm,
+            doctorId: doc._id // Thay thế bằng ID cụ thể của bác sĩ trong vòng lặp
+          };
+          await axios.post(`${BASE_URL}/schedules`, payload, {
+            headers: { Authorization: `Bearer ${token}` }
+          });
+          successCount++;
+        } catch (err) {
+          console.error(`Lỗi tạo lịch cho bác sĩ ${doc["Họ và tên"]}:`, err);
+          failCount++;
+        }
+      }
+
+      alert(`Hoàn thành! Tạo thành công ${successCount} lịch trực. Thất bại: ${failCount}.`);
+      setShowCreate(false)
+      setCreateForm({ doctorId: "", date: "", shift: "morning", maxPatients: 20, room: "", note: "", status: "active" })
+      fetchSchedules()
+      setCreating(false)
+      return;
+    }
+
+    // TRƯỜNG HỢP 2: TẠO LẺ CHO 1 BÁC SĨ NHƯ CŨ
     try {
       await axios.post(`${BASE_URL}/schedules`, createForm, {
         headers: { Authorization: `Bearer ${token}` }
@@ -178,12 +224,15 @@ export default function AdminSchedule() {
     afternoon: schedules.filter(s => s.shift === "afternoon").length,
   }
 
-  const FormFields = ({ form, setForm }) => (
+  // Component Form Fields có chứa tính năng Chọn tất cả bác sĩ
+  const FormFields = ({ form, setForm, isEdit = false }) => (
     <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
       <div>
         <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Bác sĩ <span style={{ color: ERROR }}>*</span></label>
         <select value={form.doctorId} onChange={e => setForm({ ...form, doctorId: e.target.value })} style={inputStyle}>
           <option value="">-- Chọn bác sĩ --</option>
+          {/* Chỉ hiển thị Option Tất cả bác sĩ khi đang ở Modal TẠO MỚI, không hiện khi SỬA */}
+          {!isEdit && <option value="ALL_DOCTORS" style={{ fontWeight: "bold", color: PRIMARY_MED }}>🌟 TẤT CẢ BÁC SĨ</option>}
           {doctors.map(d => (
             <option key={d._id} value={d._id}>
               {d["Họ và tên"]} {d["Chuyên Khoa"] ? `– ${d["Chuyên Khoa"]}` : ""}
@@ -208,7 +257,7 @@ export default function AdminSchedule() {
         <input type="text" value={form.room} onChange={e => setForm({ ...form, room: e.target.value })} placeholder="VD: Phòng 101, P.A1..." style={inputStyle} />
       </div>
       <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Số BN tối đa</label>
+        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Số BN tối đa (Mỗi bác sĩ)</label>
         <input type="number" min={1} max={100} value={form.maxPatients} onChange={e => setForm({ ...form, maxPatients: Number(e.target.value) })} style={inputStyle} />
       </div>
       <div>
@@ -289,7 +338,6 @@ export default function AdminSchedule() {
             <option value="">Tất cả ca</option>
             <option value="morning">🌅 Ca sáng</option>
             <option value="afternoon">☀️ Ca chiều</option>
-            <option value="evening">🌙 Ca tối</option>
           </select>
           <button onClick={fetchSchedules}
             style={{ background: PRIMARY, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
@@ -466,12 +514,18 @@ export default function AdminSchedule() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>📅 Tạo lịch trực mới</h3>
-            <FormFields form={createForm} setForm={setCreateForm} />
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
-              <button onClick={() => setShowCreate(false)} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
+            <FormFields form={createForm} setForm={setCreateForm} isEdit={false} />
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24, alignItems: "center" }}>
+              {/* Hiển thị tiến trình nếu tạo hàng loạt */}
+              {creating && bulkProgress.total > 0 && (
+                <span style={{ fontSize: 13, color: PRIMARY_MED, fontWeight: 600, marginRight: "auto" }}>
+                  ⏳ Đang xử lý: {bulkProgress.current} / {bulkProgress.total} bác sĩ...
+                </span>
+              )}
+              <button onClick={() => setShowCreate(false)} disabled={creating} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
               <button onClick={handleCreate} disabled={creating}
                 style={{ padding: "9px 24px", borderRadius: 8, border: "none", background: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
-                {creating ? "Đang tạo..." : "✅ Tạo lịch"}
+                {creating ? "Đang xử lý..." : "✅ Tạo lịch"}
               </button>
             </div>
           </div>
@@ -483,7 +537,7 @@ export default function AdminSchedule() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>✏️ Chỉnh sửa lịch trực</h3>
-            <FormFields form={editForm} setForm={setEditForm} />
+            <FormFields form={editForm} setForm={setEditForm} isEdit={true} />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button onClick={() => setEditTarget(null)} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
               <button onClick={handleSave} disabled={saving}

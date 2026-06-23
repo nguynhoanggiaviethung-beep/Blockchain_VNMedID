@@ -4,7 +4,7 @@ import { DatePicker } from 'antd';
 import locale from 'antd/es/date-picker/locale/vi_VN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
-import axios from 'ajax';
+import axios from 'axios';
 
 dayjs.locale('vi');
 
@@ -37,7 +37,6 @@ export default function PatientDashboard() {
 
   // State và cấu hình API đặt bên trong Component theo chuẩn React Hook
   const [hospitals, setHospitals] = useState([]);
-  const [loadingHospitals, setLoadingHospitals] = useState(true);
   const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
   const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
 
@@ -72,10 +71,10 @@ export default function PatientDashboard() {
   const [loadingAccess, setLoadingAccess] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
 
-  // States quản lý biểu mẫu (Forms)
+  // States quản lý biểu mẫu (Forms) - Đã thêm caKham mặc định là rỗng để người dùng chọn công tâm
   const [formBasic, setFormBasic] = useState({ fullName: "", dob: "", gender: "", phone: "", address: "" });
   const [formHealth, setFormHealth] = useState({ nhomMau: "", tienSuBenh: "", diUng: "", trieuChung: "", ghiChu: "" });
-  const [formAppointment, setFormAppointment] = useState({ specialty: "Nội khoa", hospitalName: "", date: null, reason: "" });
+  const [formAppointment, setFormAppointment] = useState({ specialty: "", hospitalName: "", date: null, caKham: "", reason: "" });
 
   const headers = {
     "Content-Type": "application/json",
@@ -110,9 +109,7 @@ export default function PatientDashboard() {
           setHospitals(hospitalData);
         }
       } catch (err) {
-        console.error("Lỗi tải danh sách bệnh viện từ API:", err);
-      } finally {
-        setLoadingHospitals(false);
+        console.error("Lỗi tải danh sách bệnh viện từ API (Có thể bỏ qua nếu dùng danh sách cứng):", err.message);
       }
     };
 
@@ -153,7 +150,6 @@ export default function PatientDashboard() {
     } else {
       setLoading(false);
       setLoadingHistory(false);
-      setLoadingHospitals(false);
     }
   }, [userId]);
 
@@ -372,27 +368,58 @@ export default function PatientDashboard() {
   const handleBookAppointment = async (e) => {
     e.preventDefault();
     if (!formAppointment.hospitalName) { setError("Vui lòng chỉ định Bệnh viện bạn muốn đến khám!"); return; }
+    if (!formAppointment.specialty) { setError("Vui lòng chọn Chuyên khoa đăng ký khám!"); return; }
     if (!formAppointment.date) { setError("Vui lòng chọn thời gian ngày hẹn khám bệnh!"); return; }
-    setSaving(true); setError("");
+    if (!formAppointment.caKham) { setError("Vui lòng chỉ định Ca khám thích hợp (Ca Sáng / Ca Chiều)!"); return; }
+    
+    setSaving(true); 
+    setError("");
+    
     try {
       const formattedDate = formAppointment.date.format("YYYY-MM-DD");
+      
+      // Đồng bộ các loại key ca khám để vượt qua lớp filter nghiêm ngặt của Backend
       const payloadData = {
-        patientId: userId, patientName: localStorage.getItem("fullName"),
-        specialty: formAppointment.specialty, appointmentDate: formattedDate,
-        trieuChungLamSang: formAppointment.reason, hospitalName: formAppointment.hospitalName
+        patientId: userId, 
+        patientName: localStorage.getItem("fullName") || fullName,
+        specialty: formAppointment.specialty, 
+        chuyenKhoa: formAppointment.specialty,
+        appointmentDate: formattedDate,
+        ngayKham: formattedDate,
+        hospitalName: formAppointment.hospitalName,
+        benhVien: formAppointment.hospitalName,
+        trieuChungLamSang: formAppointment.reason, 
+        reason: formAppointment.reason,
+        
+        // Cung cấp trường ca khám giải quyết dứt điểm lỗi trong ảnh image_c66be3.png
+        caKham: formAppointment.caKham,
+        shift: formAppointment.caKham,
+        timeSlot: formAppointment.caKham
       };
-      const resRecord = await fetch(`${BASE_URL}/visits`, { method: "POST", headers, body: JSON.stringify(payloadData) });
+      
+      const resRecord = await fetch(`${BASE_URL}/visits`, { 
+        method: "POST", 
+        headers, 
+        body: JSON.stringify(payloadData) 
+      });
       const dataRecord = await resRecord.json();
+      
       if (dataRecord.success) {
         const resHistory = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers });
         const dataHistory = await resHistory.json();
         if (dataHistory.success) setHistoryList(dataHistory.data || []);
+        
         showSuccess("Khởi tạo phiếu hẹn đăng ký khám bệnh thành công!");
-        setFormAppointment({ specialty: "Nội khoa", hospitalName: "", date: null, reason: "" });
+        setFormAppointment({ specialty: "", hospitalName: "", date: null, caKham: "", reason: "" });
         setTab("info");
-      } else setError(dataRecord.message || "Lỗi xử lý tạo lịch khám từ máy chủ.");
-    } catch { setError("Lỗi kết nối mạng tổng đài."); }
-    finally { setSaving(false); }
+      } else {
+        setError(dataRecord.message || "Lỗi xử lý tạo lịch khám từ máy chủ.");
+      }
+    } catch { 
+      setError("Lỗi kết nối mạng tổng đài."); 
+    } finally { 
+      setSaving(false); 
+    }
   };
 
   const handleLogout = () => { localStorage.clear(); navigate("/"); };
@@ -632,19 +659,17 @@ export default function PatientDashboard() {
               <div style={{ maxWidth: 600 }}>
                 <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>Đặt lịch khám bệnh trực tuyến liên kết cơ sở</h4>
                 <form onSubmit={handleBookAppointment}>
+                  
+                  {/* 1. Chọn Bệnh Viện */}
                   <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>Cơ sở y tế mong muốn tiếp tiếp nhận <span style={{ color: 'red' }}>*</span></label>
-                    
-                    {/* ✅ GIẢI QUYẾT TRIỆT ĐỂ LỖI TRỐNG DROPDOWN QUA CƠ CHẾ DỰ PHÒNG THÔNG MINH */}
+                    <label style={labelStyle}>Cơ sở y tế mong muốn tiếp nhận <span style={{ color: 'red' }}>*</span></label>
                     <select 
                       style={inputStyle} 
                       value={formAppointment.hospitalName} 
                       onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}
                     >
                       <option value="">-- Click chọn cơ sở bệnh viện tương thích --</option>
-                      
                       {hospitals && hospitals.length > 0 ? (
-                        // 1. Khớp động dữ liệu từ database backend trả về
                         hospitals.map((h, idx) => {
                           const nameStr = h.name || h.hospitalName || h.tenBenhVien || (typeof h === 'string' ? h : "");
                           if (!nameStr) return null;
@@ -655,7 +680,6 @@ export default function PatientDashboard() {
                           );
                         })
                       ) : (
-                        // 2. Dự phòng an toàn (Fallback) hiển thị mảng tĩnh nếu API chưa nạp xong hoặc trống
                         HOSPITALS.map((hospital, idx) => (
                           <option key={idx} value={hospital}>
                             {hospital}
@@ -665,9 +689,15 @@ export default function PatientDashboard() {
                     </select>
                   </div>
 
+                  {/* 2. Chọn Chuyên Khoa Đầy Đủ */}
                   <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>Sắp xếp Chuyên khoa đăng ký</label>
-                    <select style={inputStyle} value={formAppointment.specialty} onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))}>
+                    <label style={labelStyle}>Sắp xếp Chuyên khoa đăng ký <span style={{ color: 'red' }}>*</span></label>
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.specialty} 
+                      onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))}
+                    >
+                      <option value="">-- Chọn chuyên khoa khám --</option>
                       <option value="Nội khoa">Nội khoa tổng quát</option>
                       <option value="Ngoại khoa">Ngoại khoa chuyên sâu</option>
                       <option value="Nhi khoa">Nhi khoa cộng đồng</option>
@@ -675,9 +705,12 @@ export default function PatientDashboard() {
                       <option value="Tai Mũi Họng">Tai Mũi Họng</option>
                       <option value="Răng Hàm Mặt">Răng Hàm Mặt</option>
                       <option value="Da liễu">Da liễu thẩm mỹ</option>
+                      <option value="Nhãn khoa">Nhãn khoa (Mắt)</option>
+                      <option value="Tim mạch">Tim mạch học</option>
                     </select>
                   </div>
 
+                  {/* 3. Chọn Ngày Khám */}
                   <div style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
                     <label style={labelStyle}>Thời gian ngày đặt lịch hẹn khám bệnh <span style={{ color: 'red' }}>*</span></label>
                     <DatePicker 
@@ -690,9 +723,29 @@ export default function PatientDashboard() {
                     />
                   </div>
 
+                  {/* 4. CHỌN CA KHÁM (GIẢI QUYẾT TRIỆT ĐỂ LỖI 400 BACKEND) */}
+                  <div style={{ marginBottom: 16 }}>
+                    <label style={labelStyle}>Ca khám mong muốn <span style={{ color: 'red' }}>*</span></label>
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.caKham} 
+                      onChange={e => setFormAppointment(p => ({ ...p, caKham: e.target.value }))}
+                    >
+                      <option value="">-- Chọn ca khám trong ngày --</option>
+                      <option value="Sáng">Ca Sáng (07:30 - 11:30)</option>
+                      <option value="Chiều">Ca Chiều (13:30 - 17:00)</option>
+                    </select>
+                  </div>
+
+                  {/* 5. Lý Do Khám */}
                   <div style={{ marginBottom: 24 }}>
                     <label style={labelStyle}>Triệu chứng lâm sàng sơ bộ / Lý do khám</label>
-                    <textarea style={{ ...inputStyle, height: 100, resize: "none" }} value={formAppointment.reason} onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))} placeholder="Mô tả chi tiết tình trạng sức khỏe hiện tại để bác sĩ tiện tiếp quản..." />
+                    <textarea 
+                      style={{ ...inputStyle, height: 100, resize: "none" }} 
+                      value={formAppointment.reason} 
+                      onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))} 
+                      placeholder="Mô tả chi tiết tình trạng sức khỏe hiện tại để bác sĩ tiện tiếp quản..." 
+                    />
                   </div>
 
                   <button type="submit" disabled={saving} style={{
