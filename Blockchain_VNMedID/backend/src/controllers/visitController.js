@@ -105,9 +105,13 @@ exports.getDoctorPendingVisits = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    let queryDoctorId = doctorId;
+    let queryConditions = [
+      { doctorId: doctorId },
+      { doctorId: String(doctorId) }
+    ];
+
     if (mongoose.Types.ObjectId.isValid(doctorId)) {
-      queryDoctorId = new mongoose.Types.ObjectId(doctorId);
+      queryConditions.push({ doctorId: new mongoose.Types.ObjectId(doctorId) });
     }
 
     // ✅ Đã xóa đoạn trùng lặp và sửa lỗi cú pháp hoàn chỉnh
