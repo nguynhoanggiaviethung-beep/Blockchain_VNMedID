@@ -66,6 +66,20 @@ export default function AdminSchedule() {
 
   // Modal xóa
   const [confirmDelete, setConfirmDelete] = useState(null)
+ const getStatusLabel = (shiftDate) => {
+    if (!shiftDate) return { label: "Không xác định", bg: "#F1F5F9", color: GRAY_TEXT, icon: "❓" };
+    const today = new Date();
+    today.setHours(0, 0, 0, 0); // Đưa mốc thời gian về 0h00 hôm nay
+    
+    const d = new Date(shiftDate);
+    d.setHours(0, 0, 0, 0); // Đưa mốc lịch trực về 0h00 để so sánh
+
+    // LOGIC CHỮ MỚI THEO Ý MINH ANH:
+    if (d < today) return { label: "Đã khám", bg: "#F1F5F9", color: GRAY_TEXT, icon: "⏳" };
+    if (d.getTime() === today.getTime()) return { label: "Đang khám", bg: SUCCESS_LIGHT, color: SUCCESS, icon: "🔥" };
+    return { label: "Chưa khám", bg: PRIMARY_LIGHT, color: PRIMARY_MED, icon: "📅" };
+  };
+  
 
   const fetchSchedules = () => {
     setLoading(true)
@@ -361,7 +375,7 @@ export default function AdminSchedule() {
           <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
               <tr style={{ background: PRIMARY_LIGHT }}>
-                {["STT", "Bác sĩ", "Chuyên khoa", "Ngày trực", "Ca trực", "Phòng", "Tối đa BN", "Trạng thái", "Thao tác"].map(h => (
+                {["STT", "Bác sĩ", "Chuyên khoa", "Ngày trực", "Ca trực", "Phòng", "Trạng thái", "Thao tác"].map(h => (
                   <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 13, color: PRIMARY, fontWeight: 600 }}>{h}</th>
                 ))}
               </tr>
@@ -388,9 +402,9 @@ export default function AdminSchedule() {
                       </div>
                     </td>
                     <td style={{ padding: "12px 14px" }}>
-                      {s.doctorId?.["Chuyên Khoa"] ? (
+                      {s.doctorId?.specialty || s.specialty ? (
                         <span style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                          {s.doctorId["Chuyên Khoa"]}
+                        {s.doctorId?.specialty || s.specialty}
                         </span>
                       ) : "—"}
                     </td>
@@ -406,22 +420,18 @@ export default function AdminSchedule() {
                     <td style={{ padding: "12px 14px", color: "#475569", fontSize: 13 }}>
                       {s.room || <span style={{ color: "#CBD5E1" }}>—</span>}
                     </td>
+                    
                     <td style={{ padding: "12px 14px" }}>
-                      <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
-                        <div style={{ fontWeight: 700, color: PRIMARY_MED, fontSize: 16 }}>{s.currentPatients ?? 0}</div>
-                        <div style={{ color: GRAY_TEXT, fontSize: 12 }}>/ {s.maxPatients ?? "—"}</div>
-                      </div>
-                      {s.maxPatients && (
-                        <div style={{ marginTop: 4, height: 4, borderRadius: 2, background: "#E2E8F0", overflow: "hidden", width: 60 }}>
-                          <div style={{ height: "100%", borderRadius: 2, width: `${Math.min(100, ((s.currentPatients || 0) / s.maxPatients) * 100)}%`, background: ((s.currentPatients || 0) / s.maxPatients) > 0.8 ? ERROR : SUCCESS }} />
-                        </div>
-                      )}
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <span style={{ background: st.bg, color: st.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                        {st.icon} {st.label}
-                      </span>
-                    </td>
+  {(() => {
+    const stt = getStatusLabel(s.date);
+    return (
+      <span style={{ background: stt.bg, color: stt.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
+        {stt.icon} {stt.label}
+      </span>
+    );
+  })()}
+</td>
+
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 6 }}>
                         <button onClick={() => openEdit(s)}
