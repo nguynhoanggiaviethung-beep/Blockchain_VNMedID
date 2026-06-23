@@ -4,7 +4,7 @@ import { DatePicker } from 'antd';
 import locale from 'antd/es/date-picker/locale/vi_VN';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
-import axios from 'axios';
+import axios from 'ajax';
 
 dayjs.locale('vi');
 
@@ -35,9 +35,7 @@ export default function PatientDashboard() {
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
 
-  // ========================================================
-  // ✅ ĐÃ DI CHUYỂN CÁC BIẾN VÀO ĐÚNG VỊ TRÍ TRONG COMPONENT
-  // ========================================================
+  // State và cấu hình API đặt bên trong Component theo chuẩn React Hook
   const [hospitals, setHospitals] = useState([]);
   const [loadingHospitals, setLoadingHospitals] = useState(true);
   const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
@@ -102,9 +100,8 @@ export default function PatientDashboard() {
     }
   };
 
-  // 2. Chạy lần đầu: Lấy thông tin cá nhân và lịch sử khám chung (Web2 MongoDB)
+  // 2. Chạy lần đầu: Lấy thông tin cá nhân, lịch sử khám và danh sách bệnh viện động
   useEffect(() => {
-    // ✅ BỔ SUNG: Hàm tải danh sách bệnh viện từ database thật
     const fetchHospitals = async () => {
       try {
         const res = await axios.get(`${BASE_URL}/hospitals`, { headers });
@@ -113,7 +110,7 @@ export default function PatientDashboard() {
           setHospitals(hospitalData);
         }
       } catch (err) {
-        console.error("Lỗi tải danh sách bệnh viện:", err);
+        console.error("Lỗi tải danh sách bệnh viện từ API:", err);
       } finally {
         setLoadingHospitals(false);
       }
@@ -152,7 +149,7 @@ export default function PatientDashboard() {
     if (userId) {
       loadPatientInfo();
       loadMedicalHistory();
-      fetchHospitals(); // ✅ KÍCH HOẠT CHẠY HÀM TẠI ĐÂY
+      fetchHospitals();
     } else {
       setLoading(false);
       setLoadingHistory(false);
@@ -191,7 +188,7 @@ export default function PatientDashboard() {
     if (tab === "info" && userId) loadBlockchainRecords(userId);
   }, [tab]);
 
-  // 5. Xử lý thanh toán hóa đơn bằng ví Web3 MetaMask (Khớp chuẩn xác luồng EVM)
+  // 5. Xử lý thanh toán hóa đơn bằng ví Web3 MetaMask
   const handlePayWithMetaMask = async (invoice) => {
     setInvoiceError("");
     setInvoiceSuccess("");
@@ -207,18 +204,15 @@ export default function PatientDashboard() {
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0]; 
 
-      // Kiểm tra tính chính chủ của ví định danh trên hóa đơn
       if (invoice.patientWallet && walletAddress.toLowerCase() !== invoice.patientWallet.toLowerCase()) {
         setInvoiceError(`Hóa đơn này được tạo riêng cho ví: ...${invoice.patientWallet.slice(-6)}. Ví hiện tại của bạn là: ...${walletAddress.slice(-6)}`);
         return;
       }
 
-      // Đổi định dạng tiền sang Wei bất biến
       const amountWei = BigInt(invoice.amountInWei || Math.round(invoice.amount * 1e18));
       const amountHex = "0x" + amountWei.toString(16);
 
-      // Mã hóa dữ liệu Calldata chuẩn ABI Encoding của Ethereum cho hàm truyền tham số Chuỗi (String)
-      const selector = "7c9495b2"; // 4-byte hash selector cho hàm payInvoice(string)
+      const selector = "7c9495b2"; 
       const strBytes = Array.from(new TextEncoder().encode(invoice.invoiceId));
       const strHex = strBytes.map(b => b.toString(16).padStart(2, "0")).join("");
       
@@ -229,7 +223,6 @@ export default function PatientDashboard() {
       
       const finalCalldata = "0x" + selector + offsetPart + lengthPart + contentPart;
 
-      // Thực thi ký duyệt lệnh gửi tiền lên MetaMask
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [{
@@ -237,7 +230,7 @@ export default function PatientDashboard() {
           to: PAYMENT_CONTRACT_ADDRESS,
           value: amountHex,
           data: finalCalldata,
-          gas: "0x186A0" // Giới hạn an toàn 100,000 Gas
+          gas: "0x186A0"
         }]
       });
 
@@ -247,7 +240,6 @@ export default function PatientDashboard() {
       let isSuccess = false;
       let receipt = null;
 
-      // Cơ chế Thăm dò (Polling Receipt) tối đa 40 lần, giãn cách 3 giây/lần
       for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 3000));
         try {
@@ -262,7 +254,6 @@ export default function PatientDashboard() {
         } catch (err) { console.error("Đang đọc tiến trình receipt ngầm...", err); }
       }
 
-      // Xử lý các kịch bản kết quả giao dịch sau khi kết thúc vòng lặp
       if (!receipt) {
         setTxPending("");
         setInvoiceError("⚠️ Không nhận được biên lai từ mạng lưới Sepolia (Mạng bận). Hãy kiểm tra lại sau ít phút.");
@@ -275,7 +266,6 @@ export default function PatientDashboard() {
         return;
       }
 
-      // LUỒNG XUÔI CHUẨN: Sau khi Blockchain thành công -> Gọi API thông báo cơ sở dữ liệu Backend cập nhật trạng thái
       try {
         const response = await axios.post(
           `${BASE_URL}/invoices/payments`,
@@ -303,7 +293,7 @@ export default function PatientDashboard() {
     }
   };
 
-  // 6. Xử lý ký duyệt cấp quyền truy cập bệnh án bảo mật cho Bác sĩ bằng mã hóa EIP-191
+  // 6. Xử lý ký duyệt cấp quyền truy cập bệnh án bảo mật cho Bác sĩ
   const handleApproveRequest = async (request) => {
     setError("");
     setSaveSuccess("");
@@ -316,7 +306,6 @@ export default function PatientDashboard() {
     try {
       setApprovingId(request._id);
       
-      // Yêu cầu chuyển đúng ví bệnh nhân chỉ định để ký số công khai
       await window.ethereum.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0];
@@ -327,7 +316,6 @@ export default function PatientDashboard() {
         return;
       }
 
-      // Thông điệp ký mã hóa đồng nhất với cấu trúc giải mã tại Backend
       const message = `Toi dong y cap quyen cho bac si ${request.doctorWallet.toLowerCase()} xem ho so cua toi (${request.patientId})`;
 
       const signature = await window.ethereum.request({
@@ -591,7 +579,7 @@ export default function PatientDashboard() {
                   {/* Bản Ghi Hồ Sơ Băm Khớp Xác Thực On-Chain */}
                   <div style={{ borderTop: `2px dashed ${BORDER}`, paddingTop: "24px", marginTop: "16px" }}>
                     <h4 style={{ color: "#16A34A", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 8 }}>
-                      🔗 BANH GHI CHỨNG THỰC BỆNH ÁN BẤT BIẾN ON-CHAIN (SEPOLIA NETWORK)
+                      🔗 BẢN GHI CHỨNG THỰC BỆNH ÁN BẤT BIẾN ON-CHAIN (SEPOLIA NETWORK)
                     </h4>
                     <p style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 0, marginBottom: 16 }}>
                       Dữ liệu băm mật mã học (Record Hash) được trích xuất thời gian thực trực tiếp từ mạng phi tập trung Sepolia Testnet thông qua Smart Contract.
@@ -647,25 +635,33 @@ export default function PatientDashboard() {
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Cơ sở y tế mong muốn tiếp tiếp nhận <span style={{ color: 'red' }}>*</span></label>
                     
-                    {/* ✅ ĐÃ SỬA CẤU TRÚC SELECT ĐỂ TỰ ĐỘNG MAP TỪ DATABASE HỢP LỆ */}
+                    {/* ✅ GIẢI QUYẾT TRIỆT ĐỂ LỖI TRỐNG DROPDOWN QUA CƠ CHẾ DỰ PHÒNG THÔNG MINH */}
                     <select 
                       style={inputStyle} 
                       value={formAppointment.hospitalName} 
                       onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}
-                      disabled={loadingHospitals}
                     >
-                      <option value="">
-                        {loadingHospitals ? "-- Đang tải danh sách cơ sở... --" : "-- Click chọn cơ sở bệnh viện tương thích --"}
-                      </option>
+                      <option value="">-- Click chọn cơ sở bệnh viện tương thích --</option>
                       
-                      {!loadingHospitals && hospitals.map((h) => {
-                        const nameStr = h.name || h.hospitalName || h["Tên Bệnh viện"] || h;
-                        return (
-                          <option key={h._id || nameStr} value={nameStr}>
-                            {nameStr}
+                      {hospitals && hospitals.length > 0 ? (
+                        // 1. Khớp động dữ liệu từ database backend trả về
+                        hospitals.map((h, idx) => {
+                          const nameStr = h.name || h.hospitalName || h.tenBenhVien || (typeof h === 'string' ? h : "");
+                          if (!nameStr) return null;
+                          return (
+                            <option key={h._id || idx} value={nameStr}>
+                              {nameStr}
+                            </option>
+                          );
+                        })
+                      ) : (
+                        // 2. Dự phòng an toàn (Fallback) hiển thị mảng tĩnh nếu API chưa nạp xong hoặc trống
+                        HOSPITALS.map((hospital, idx) => (
+                          <option key={idx} value={hospital}>
+                            {hospital}
                           </option>
-                        );
-                      })}
+                        ))
+                      )}
                     </select>
                   </div>
 
