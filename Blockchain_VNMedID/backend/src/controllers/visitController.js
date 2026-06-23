@@ -97,6 +97,7 @@ exports.bookAppointment = async (req, res) => {
 
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ THEO BỆNH VIỆN CÔNG TÁC ──────────────────────
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
+// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
@@ -104,12 +105,20 @@ exports.getDoctorPendingVisits = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    // Lấy danh sách lượt khám ĐÃ ĐƯỢC GÁN cho bác sĩ này (trạng thái examining)
+    let queryDoctorId = doctorId;
+    if (mongoose.Types.ObjectId.isValid(doctorId)) {
+      queryDoctorId = new mongoose.Types.ObjectId(doctorId);
+    }
+
+    // ✅ Đã xóa đoạn trùng lặp và sửa lỗi cú pháp hoàn chỉnh
     const pendingVisits = await Visit.find({
-      doctorId: doctorId,
+      $or: [
+        { doctorId: doctorId },       // Khớp nếu DB lưu dạng String
+        { doctorId: queryDoctorId }  // Khớp nếu DB lưu dạng ObjectId gốc từ bảng Shift
+      ],
       status: "examining" 
     })
-    .populate('shiftId', 'shift room date') // Lấy thêm thông tin phòng/ca để hiển thị
+    .populate('shiftId', 'shift room date') 
     .sort({ createdAt: 1 });
 
     return res.json({
