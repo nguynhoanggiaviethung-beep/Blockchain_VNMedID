@@ -2,7 +2,7 @@
 const mongoose = require('mongoose');
 const Doctor = require('../models/doctor'); 
 const bcrypt = require('bcrypt');
-
+const Visit = require('../models/Visit');
 /**
  * @desc    Tạo hồ sơ bác sĩ mới (Gồm: Tạo tài khoản ở 'users' + Tạo hồ sơ ở 'doctors')
  * @route   POST /api/v1/doctors
@@ -245,11 +245,44 @@ const deleteDoctor = async (req, res) => {
         });
     }
 };
+/**
+ * @desc    Xem chi tiết bác sĩ & lịch khám được phân công
+ * @route   GET /api/v1/doctors/:doctorId/details
+ */
+const getDoctorDetails = async (req, res) => {
+    try {
+        const { doctorId } = req.params;
+        const db = mongoose.connection.db;
+        
+        // Tìm thông tin bác sĩ bằng native driver
+        const objId = new mongoose.Types.ObjectId(doctorId);
+        const doctorInfo = await db.collection('doctors').findOne({ _id: objId });
+        
+        if (!doctorInfo) {
+            return res.status(404).json({ success: false, message: 'Không tìm thấy bác sĩ!' });
+        }
+
+        // Tìm danh sách bệnh nhân/ca khám đã gán cho bác sĩ này
+        const assignedVisits = await Visit.find({ doctorId: doctorId })
+            .sort({ appointmentDate: 1 })
+            .populate('shiftId', 'shift room date');
+
+        return res.json({ 
+            success: true, 
+            doctor: doctorInfo, 
+            visits: assignedVisits,
+            totalVisits: assignedVisits.length
+        });
+    } catch (error) {
+        return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+    }
+};
 
 module.exports = {
     createDoctor,
     getDoctorById,
     getAllDoctors,
     updateDoctor,
-    deleteDoctor
+    deleteDoctor,
+    getDoctorDetails,
 };

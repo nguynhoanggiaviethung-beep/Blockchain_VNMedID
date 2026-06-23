@@ -1,19 +1,65 @@
 const Visit = require('../models/Visit');
+const Shift = require('../models/Shift');
+
 const Invoice = require('../models/Invoice');
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
 const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs'); // ✅ Thêm IPFS
+const axios = require('axios');
+const { wrapper } = require('axios-cookiejar-support');
+const { CookieJar } = require('tough-cookie');
+
+const getDrugPriceFromDAV = async (drugName) => {
+  try {
+    const jar = new CookieJar();
+    const client = wrapper(axios.create({ jar, withCredentials: true }));
+    await client.get('https://dichvucong.dav.gov.vn/congbogiathuoc');
+    const cookies = await jar.getCookies('https://dichvucong.dav.gov.vn');
+    const xsrf = cookies.find(c => c.key === 'XSRF-TOKEN')?.value;
+    if (!xsrf) return null;
+    const { data } = await client.post(
+      'https://dichvucong.dav.gov.vn/api/services/app/quanLyGiaThuoc/GetListCongBoPublicPaging',
+      { filterAll: drugName, CongBoGiaThuoc: {}, KichHoat: true, skipCount: 0, maxResultCount: 1, sorting: null },
+      { headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-XSRF-TOKEN': xsrf, Origin: 'https://dichvucong.dav.gov.vn', Referer: 'https://dichvucong.dav.gov.vn/congbogiathuoc' } }
+    );
+    const items = data?.result?.items;
+    if (!items || items.length === 0) return null;
+    return { tenThuoc: items[0].tenThuoc, giaBanBuonDuKien: items[0].giaBanBuonDuKien || 0 };
+  } catch (err) {
+    console.error(`❌ DAV lỗi "${drugName}":`, err.message);
+    return null;
+  }
+};
 
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
+// ─── BỆNH NHÂN ĐẶT LỊCH (TỰ ĐỘNG GÁN BÁC SĨ) ──────────────────────────────
 exports.bookAppointment = async (req, res) => {
   try {
-    const { patientId, patientName, specialty, appointmentDate, trieuChungLamSang, hospitalName } = req.body;
+    // Lưu ý: Yêu cầu Frontend gửi thêm trường 'shift' (morning hoặc afternoon)
+    const { patientId, patientName, specialty, appointmentDate, shift, trieuChungLamSang, hospitalName } = req.body;
 
-    if (!patientId || !specialty || !appointmentDate || !hospitalName) {
-      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám và bệnh viện!' });
+    if (!patientId || !specialty || !appointmentDate || !hospitalName || !shift) {
+      return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám, ca khám và bệnh viện!' });
     }
 
+    // 1. TỰ ĐỘNG TÌM BÁC SĨ ĐANG TRỰC
+    // Máy sẽ dò xem ngày hôm đó, ca đó, chuyên khoa đó có bác sĩ nào đang có lịch active không
+    const activeShift = await Shift.findOne({
+        date: appointmentDate,
+        shift: shift,
+        specialty: specialty,
+        status: 'active'
+    });
+
+    if (!activeShift) {
+        return res.status(404).json({ 
+            success: false, 
+            message: `Rất tiếc, không có bác sĩ chuyên khoa ${specialty} trực vào ca này ngày ${appointmentDate}. Vui lòng chọn khung giờ khác!` 
+        });
+    }
+
+    // 2. GÁN LUÔN BÁC SĨ VÀO HỒ SƠ & LƯU LẠI
     const visit = new Visit({
       patientId,
       patientName: patientName || "",
@@ -21,17 +67,27 @@ exports.bookAppointment = async (req, res) => {
       appointmentDate,
       trieuChungLamSang: trieuChungLamSang || "",
       hospitalName,
-      status: "pending"
+      doctorId: activeShift.doctorId,       // 👈 Máy tự gán ID bác sĩ tìm được
+      doctorName: activeShift.doctorName,   // 👈 Máy tự gán Tên bác sĩ
+      shiftId: activeShift._id,             // 👈 Gắn chốt luôn vào ca trực đó
+      status: "examining"                   // 👈 Đổi trạng thái bỏ qua bước pending của admin
     });
+    
     await visit.save();
 
-    return res.status(201).json({ success: true, data: visit });
+    return res.status(201).json({ 
+        success: true, 
+        message: 'Đặt lịch và tự động phân công bác sĩ thành công!',
+        data: visit 
+    });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
 
+
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ THEO BỆNH VIỆN CÔNG TÁC ──────────────────────
+// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
@@ -39,22 +95,16 @@ exports.getDoctorPendingVisits = async (req, res) => {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    const db = mongoose.connection.db;
-    const doctorInfo = await db.collection("doctors").findOne({ _id: new mongoose.Types.ObjectId(doctorId) });
-    if (!doctorInfo || !doctorInfo.hospitalName) {
-      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin bệnh viện của bác sĩ này!' });
-    }
-
-    const currentHospital = doctorInfo.hospitalName;
-
+    // Lấy danh sách lượt khám ĐÃ ĐƯỢC GÁN cho bác sĩ này (trạng thái examining)
     const pendingVisits = await Visit.find({
-      hospitalName: currentHospital,
-      status: "pending"
-    }).sort({ createdAt: 1 });
+      doctorId: doctorId,
+      status: "examining" 
+    })
+    .populate('shiftId', 'shift room date') // Lấy thêm thông tin phòng/ca để hiển thị
+    .sort({ createdAt: 1 });
 
     return res.json({
       success: true,
-      hospitalName: currentHospital,
       count: pendingVisits.length,
       data: pendingVisits
     });
@@ -122,11 +172,12 @@ exports.getAllVisits = async (req, res) => {
 exports.updateVisit = async (req, res) => {
   try {
     const { id } = req.params;
-    const {
-      status, doctorId, doctorName, shiftId,
-      diagnosis, chanDoanChuyenMon, huongDieuTri,
-      prescription, note, hospitalName
-    } = req.body;
+    const { status, doctorId, doctorName, shiftId,
+  diagnosis, chanDoanChuyenMon, huongDieuTri,
+  prescription, note, hospitalName,
+  prescribedDrugs  // ✅ THÊM
+} = req.body;
+
 
     // Lấy visit gốc trước để biết trạng thái cũ và đủ context
     const existingVisit = await Visit.findById(id);
@@ -135,6 +186,23 @@ exports.updateVisit = async (req, res) => {
     }
 
     const isCompletingNow = status === 'completed' && existingVisit.status !== 'completed';
+    // ✅ THÊM: Tra giá thuốc từ DAV
+let drugsWithPrice = existingVisit.drugs || [];
+let totalVND = existingVisit.totalVND || 0;
+
+if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length > 0) {
+  drugsWithPrice = [];
+  totalVND = 0;
+  for (const drug of prescribedDrugs) {
+    const result = await getDrugPriceFromDAV(drug.drugName);
+    const priceVND = result?.giaBanBuonDuKien || 0;
+    const tenThuoc = result?.tenThuoc || name;
+    drugsWithPrice.push({ drugName: tenThuoc, priceVND });
+    totalVND += priceVND;
+    console.log(`✅ ${tenThuoc}: ${priceVND.toLocaleString('vi-VN')}đ`);
+  }
+}
+
 
     let ipfsHash = existingVisit.ipfsHash || "";
     let ipfsUrl = ipfsHash ? getIPFSGatewayUrl(ipfsHash) : "";
@@ -210,6 +278,9 @@ exports.updateVisit = async (req, res) => {
         ...(note              !== undefined && { note }),
         ...(hospitalName      !== undefined && { hospitalName }),
         ...(isCompletingNow   && { ipfsHash }), // ✅ chỉ ghi ipfsHash khi vừa hoàn thành
+        ...(isCompletingNow   && { ipfsHash }),
+        ...(drugsWithPrice.length > 0 && { drugs: drugsWithPrice, totalVND }),
+        
       },
       { new: true }
     );
@@ -233,23 +304,28 @@ exports.updateVisit = async (req, res) => {
 
         if (patientUser && patientUser.walletAddress) {
           const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
-          const defaultAmount = 0.002;
+const ETH_RATE = 80_000_000;
+const amountETH = totalVND > 0
+  ? parseFloat((totalVND / ETH_RATE).toFixed(6))
+  : 0.001;
 
-          const autoInvoice = new Invoice({
-            invoiceId: generatedInvoiceId,
-            amount: defaultAmount,
-            patientWallet: patientUser.walletAddress,
-            paymentStatus: 'pending',
-            createdAt: new Date()
-          });
-          await autoInvoice.save();
+const autoInvoice = new Invoice({
+  invoiceId: generatedInvoiceId,
+  amount: amountETH,
+  patientWallet: patientUser.walletAddress,
+  paymentStatus: 'pending',
+  items: drugsWithPrice,
+  totalVND,
+});
+await autoInvoice.save();
 
-          const paymentContract = getContractInstance('payment');
-          const amountWei = ethers.parseEther(defaultAmount.toString());
-          const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
-          await paymentTx.wait();
+const paymentContract = getContractInstance('payment');
+const amountWei = ethers.parseEther(amountETH.toString());
+const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
+await paymentTx.wait();
 
-          console.log(`[Tự động] Đã tạo hóa đơn liên kết: ${generatedInvoiceId} cho ví: ${patientUser.walletAddress}`);
+console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${totalVND.toLocaleString('vi-VN')}đ | ${amountETH} ETH`);
+
         } else {
           console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
         }
@@ -274,6 +350,35 @@ exports.deleteVisit = async (req, res) => {
     }
 
     return res.json({ success: true, message: 'Đã xóa lượt khám!' });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
+// ─── ADMIN: PHÂN CÔNG BÁC SĨ VÀO LƯỢT KHÁM ────────────────────────────────
+exports.assignDoctor = async (req, res) => {
+  try {
+    const { visitId } = req.params;
+    const { doctorId, doctorName, shiftId } = req.body;
+
+    const updatedVisit = await Visit.findByIdAndUpdate(
+      visitId,
+      { 
+        doctorId, 
+        doctorName, 
+        shiftId, 
+        status: "examining" 
+      },
+      { new: true }
+    )
+    // Cú pháp đặc biệt để lấy các key có dấu cách
+    .populate({ path: 'doctorId', select: { "Họ và tên": 1, "Chuyên Khoa": 1 } })
+    .populate('shiftId', 'shift room date');
+
+    if (!updatedVisit) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
+    }
+
+    return res.json({ success: true, message: 'Phân công thành công', data: updatedVisit });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }

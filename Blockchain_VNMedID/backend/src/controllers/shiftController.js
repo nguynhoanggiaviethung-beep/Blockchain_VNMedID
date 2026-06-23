@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 // ─── TẠO CA TRỰC THỦ CÔNG ───────────────────────────────────────────────────
 exports.createShift = async (req, res) => {
   try {
-    const { doctorId, doctorName, specialty, date, shift, room, maxPatients, status, note } = req.body;
+    const { doctorId, doctorName, specialty, date, shift, room, status, note } = req.body;
 
     if (!doctorId || !date) {
       return res.status(400).json({ success: false, message: 'Vui lòng chọn bác sĩ và ngày trực!' });
@@ -15,7 +15,7 @@ exports.createShift = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bác sĩ này đã có ca trực vào khung giờ đó!' });
     }
 
-    const newShift = new Shift({ doctorId, doctorName, specialty, date, shift, room, maxPatients, status, note });
+    const newShift = new Shift({ doctorId, doctorName, specialty, date, shift, room, status, note });
     await newShift.save();
 
     return res.status(201).json({ success: true, data: newShift });
@@ -172,7 +172,7 @@ exports.autoSchedule = async (req, res) => {
         date,
         shift,
         room: `Phòng ${doctorSpecialty.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 5) + 1}`,
-        maxPatients: 20,
+        
         status: 'active',
         note: 'Tự động xếp lịch'
       });
