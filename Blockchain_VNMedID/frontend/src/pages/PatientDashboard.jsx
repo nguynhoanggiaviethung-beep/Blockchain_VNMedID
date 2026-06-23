@@ -16,12 +16,6 @@ const WHITE = "#FFFFFF";
 const GRAY_TEXT = "#5F6B7A";
 const BORDER = "#CBD5E1";
 
-// Thêm 2 dòng này vào đầu component PatientDashboard
-const [hospitals, setHospitals] = useState([]);
-const [loadingHospitals, setLoadingHospitals] = useState(true);
-const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
-const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
-
 const HOSPITALS = [
   "Bệnh viện Chợ Rẫy",
   "Bệnh viện Đại học Y Dược"
@@ -40,6 +34,14 @@ export default function PatientDashboard() {
   const fullName = localStorage.getItem("fullName") || "Bệnh nhân";
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
+
+  // ========================================================
+  // ✅ ĐÃ DI CHUYỂN CÁC BIẾN VÀO ĐÚNG VỊ TRÍ TRONG COMPONENT
+  // ========================================================
+  const [hospitals, setHospitals] = useState([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(true);
+  const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
+  const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
 
   // State quản lý dữ liệu Bệnh nhân
   const [patient, setPatient] = useState(null);
@@ -102,6 +104,21 @@ export default function PatientDashboard() {
 
   // 2. Chạy lần đầu: Lấy thông tin cá nhân và lịch sử khám chung (Web2 MongoDB)
   useEffect(() => {
+    // ✅ BỔ SUNG: Hàm tải danh sách bệnh viện từ database thật
+    const fetchHospitals = async () => {
+      try {
+        const res = await axios.get(`${BASE_URL}/hospitals`, { headers });
+        if (res.data?.success) {
+          const hospitalData = res.data.hospitals || res.data.data || [];
+          setHospitals(hospitalData);
+        }
+      } catch (err) {
+        console.error("Lỗi tải danh sách bệnh viện:", err);
+      } finally {
+        setLoadingHospitals(false);
+      }
+    };
+
     const loadPatientInfo = async () => {
       try {
         const res = await fetch(`${BASE_URL}/patients/${userId}`, { headers });
@@ -135,9 +152,11 @@ export default function PatientDashboard() {
     if (userId) {
       loadPatientInfo();
       loadMedicalHistory();
+      fetchHospitals(); // ✅ KÍCH HOẠT CHẠY HÀM TẠI ĐÂY
     } else {
       setLoading(false);
       setLoadingHistory(false);
+      setLoadingHospitals(false);
     }
   }, [userId]);
 
@@ -602,14 +621,12 @@ export default function PatientDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {blockchainData.history.map((item, idx) => (
-                              <tr key={item.stt || idx} style={{ borderBottom: "1px solid #E5E7EB" }}>
-                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB", fontWeight: "bold" }}>{item.stt || (idx + 1)}</td>
-                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB", color: "#4B5563" }}>{item.time || "Vừa xong"}</td>
-                                <td style={{ padding: "10px 12px", border: "1px solid #E5E7EB" }}>
-                                  <code style={{ color: "#D946EF", background: "#FDF4FF", padding: "2px 6px", borderRadius: 4, wordBreak: "break-all", fontWeight: 600 }}>
-                                    {item.hash}
-                                  </code>
+                            {blockchainData.history.map((block, idx) => (
+                              <tr key={idx} style={{ borderBottom: "1px solid #E5E7EB" }}>
+                                <td style={{ padding: "10px 12px", fontWeight: 600 }}>#{idx + 1}</td>
+                                <td style={{ padding: "10px 12px", color: GRAY_TEXT }}>{block.timestamp}</td>
+                                <td style={{ padding: "10px 12px" }}>
+                                  <code style={{ color: "#16A34A", fontWeight: 500, wordBreak: "break-all" }}>{block.recordHash}</code>
                                 </td>
                               </tr>
                             ))}
@@ -629,25 +646,23 @@ export default function PatientDashboard() {
                 <form onSubmit={handleBookAppointment}>
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Cơ sở y tế mong muốn tiếp tiếp nhận <span style={{ color: 'red' }}>*</span></label>
+                    
+                    {/* ✅ ĐÃ SỬA CẤU TRÚC SELECT ĐỂ TỰ ĐỘNG MAP TỪ DATABASE HỢP LỆ */}
                     <select 
                       style={inputStyle} 
                       value={formAppointment.hospitalName} 
                       onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}
-                      disabled={loadingHospitals} // Vô hiệu hóa khi chưa tải xong dữ liệu
+                      disabled={loadingHospitals}
                     >
                       <option value="">
-                        {loadingHospitals ? "-- Đang đồng bộ danh sách cơ sở... --" : "-- Click chọn cơ sở bệnh viện tương thích --"}
+                        {loadingHospitals ? "-- Đang tải danh sách cơ sở... --" : "-- Click chọn cơ sở bệnh viện tương thích --"}
                       </option>
                       
-                      {!loadingHospitals && hospitals.map(h => {
-                        // 💡 Lưu ý: Hãy kiểm tra field tên bệnh viện trong DB của bạn là 'name', 'fullName' hay 'hospitalName' để chọn đúng nhé.
-                        // Ví dụ ở đây tôi dùng: h.name || h.hospitalName || h["Tên Bệnh viện"]
-                        const hospitalNameText = h.name || h.hospitalName || h["Tên Bệnh viện"] || h;
-                        const hospitalValue = h.name || h.hospitalName || h._id || h; // Nếu bạn lưu string vào phiếu hẹn thì để tên, lưu ID thì để h._id
-
+                      {!loadingHospitals && hospitals.map((h) => {
+                        const nameStr = h.name || h.hospitalName || h["Tên Bệnh viện"] || h;
                         return (
-                          <option key={h._id || hospitalNameText} value={hospitalValue}>
-                            {hospitalNameText}
+                          <option key={h._id || nameStr} value={nameStr}>
+                            {nameStr}
                           </option>
                         );
                       })}
@@ -658,205 +673,207 @@ export default function PatientDashboard() {
                     <label style={labelStyle}>Sắp xếp Chuyên khoa đăng ký</label>
                     <select style={inputStyle} value={formAppointment.specialty} onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))}>
                       <option value="Nội khoa">Nội khoa tổng quát</option>
-                      <option value="Ngoại khoa">Ngoại khoa chỉnh hình</option>
-                      <option value="Nhi khoa">Nhi khoa tổng hợp</option>
-                      <option value="Tim mạch">Chuyên khoa Tim mạch</option>
-                      <option value="Da liễu">Chuyên khoa Da liễu</option>
-                      <option value="Tai mũi họng">Chuyên khoa Tai mũi họng</option>
-                      <option value="Răng hàm mặt">Chuyên khoa Răng hàm mặt</option>
+                      <option value="Ngoại khoa">Ngoại khoa chuyên sâu</option>
+                      <option value="Nhi khoa">Nhi khoa cộng đồng</option>
+                      <option value="Sản phụ khoa">Sản phụ khoa</option>
+                      <option value="Tai Mũi Họng">Tai Mũi Họng</option>
+                      <option value="Răng Hàm Mặt">Răng Hàm Mặt</option>
+                      <option value="Da liễu">Da liễu thẩm mỹ</option>
                     </select>
                   </div>
 
-                  <div style={{ marginBottom: 16 }}>
-                    <label style={labelStyle}>Thời gian mong muốn đặt hẹn <span style={{ color: 'red' }}>*</span></label>
-                    <div style={{ marginTop: 4 }}>
-                      <DatePicker 
-                        locale={locale} format="DD/MM/YYYY" style={{ width: "100%", height: 42, borderRadius: 8 }}
-                        value={formAppointment.date} onChange={val => setFormAppointment(p => ({ ...p, date: val }))}
-                        disabledDate={current => current && current < dayjs().startOf('day')}
-                      />
-                    </div>
+                  <div style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
+                    <label style={labelStyle}>Thời gian ngày đặt lịch hẹn khám bệnh <span style={{ color: 'red' }}>*</span></label>
+                    <DatePicker 
+                      style={{ ...inputStyle, display: "flex", alignItems: "center" }} 
+                      locale={locale} 
+                      format="DD/MM/YYYY" 
+                      value={formAppointment.date} 
+                      onChange={val => setFormAppointment(p => ({ ...p, date: val }))} 
+                      placeholder="Chọn ngày khám (DD/MM/YYYY)"
+                    />
                   </div>
 
-                  <div style={{ marginBottom: 20 }}>
-                    <label style={labelStyle}>Lý do đăng ký khám / Mô tả dấu hiệu bệnh</label>
-                    <textarea 
-                      style={{ ...inputStyle, height: 100, resize: "none" }}
-                      placeholder="Mô tả chi tiết triệu chứng của bạn để điều phối bác sĩ chính xác nhất..."
-                      value={formAppointment.reason} onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))}
-                    />
+                  <div style={{ marginBottom: 24 }}>
+                    <label style={labelStyle}>Triệu chứng lâm sàng sơ bộ / Lý do khám</label>
+                    <textarea style={{ ...inputStyle, height: 100, resize: "none" }} value={formAppointment.reason} onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))} placeholder="Mô tả chi tiết tình trạng sức khỏe hiện tại để bác sĩ tiện tiếp quản..." />
                   </div>
 
                   <button type="submit" disabled={saving} style={{
                     background: PRIMARY, color: WHITE, border: "none", padding: "12px 24px",
-                    borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 14, width: "100%"
+                    borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14, width: "100%"
                   }}>
-                    {saving ? "Đang gửi hồ sơ..." : "🚀 Hoàn tất gửi yêu cầu đặt lịch hẹn"}
+                    {saving ? "Đang xử lý biểu mẫu dữ liệu..." : "Hoàn tất gửi yêu cầu giữ chỗ hẹn khám"}
                   </button>
                 </form>
               </div>
             )}
 
-            {/* ===== TAB 3: THANH TOÁN HÓA ĐƠN QUA METAMASK ===== */}
+            {/* ===== TAB 3: DANH SÁCH HÓA ĐƠN & VIỆN PHÍ ===== */}
             {tab === "invoice" && (
-              <div>
-                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 4 }}>💳 Cổng thanh toán viện phí tập trung (Web3 Pay)</h4>
-                <p style={{ fontSize: 13, color: GRAY_TEXT, marginBottom: 20 }}>
-                  Thanh toán trực tiếp, minh bạch các khoản chi phí y tế thông qua Smart Contract trên mạng thử nghiệm Sepolia.
-                </p>
-                
-                {loadingInvoice ? (
-                  <div style={{ fontSize: 14, color: GRAY_TEXT }}>Đang đồng bộ danh sách hóa đơn từ máy chủ...</div>
-                ) : invoiceList.length === 0 ? (
-                  <div style={{ background: "#F8FAFC", padding: "16px", borderRadius: 8, color: GRAY_TEXT, fontSize: 13, fontStyle: "italic", border: `1px solid ${BORDER}` }}>
-                    Hiện không tìm thấy hóa đơn viện phí nào phát sinh cần chi trả.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {invoiceList.map((inv) => (
-                      <div key={inv._id || inv.invoiceId} style={{ background: WHITE, borderRadius: 10, padding: "20px", border: `1px solid ${BORDER}` }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 10 }}>
-                          <div>
-                            <span style={{ fontWeight: 700, color: PRIMARY, fontSize: 15 }}>Mã số hóa đơn viện phí: {inv.invoiceId}</span>
-                            <div style={{ fontSize: 12, color: GRAY_TEXT, marginTop: 2 }}>Ngày xuất: {new Date(inv.createdAt).toLocaleString('vi-VN')}</div>
+              loadingInvoice ? <div style={{ textAlign: "center", padding: 20, color: GRAY_TEXT }}>Đang kết nối hệ thống kế toán...</div> : invoiceList.length === 0 ? (
+                <div style={{ background: "#F8FAFC", padding: "16px", borderRadius: 8, color: GRAY_TEXT, fontSize: 13, fontStyle: "italic", border: `1px solid ${BORDER}` }}>
+                  ℹ️ Hiện tại không ghi nhận hóa đơn dịch vụ viện phí nào cần thanh toán cho mã tài khoản này.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <h4 style={{ color: PRIMARY, margin: "0 0 4px 0" }}>Bảng kê khai viện phí dịch vụ tổng kết</h4>
+                  {invoiceList.map((invoice) => (
+                    <div key={invoice._id} style={{ background: "#F8FAFC", borderRadius: 10, padding: "20px", border: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div><strong>Mã số hóa đơn:</strong> <code style={{ color: PRIMARY, fontWeight: 600 }}>{invoice.invoiceId}</code></div>
+                        <div><strong>Nội dung thanh toán:</strong> {invoice.description || "Chi phí khám bệnh & cấp phát vật tư y tế"}</div>
+                        <div><strong>Cơ sở bệnh viện ban hành:</strong> {invoice.hospitalName || "VNmedID Network"}</div>
+                        <div><strong>Số tiền quy đổi viện phí:</strong> <span style={{ color: "#E24B4A", fontWeight: 700, fontSize: 16 }}>{invoice.amount} ETH</span></div>
+                        {invoice.status === "paid" && (
+                          <div style={{ fontSize: 12, color: "#16A34A", wordBreak: "break-all", marginTop: 4 }}>
+                            <strong>Mã băm hóa đơn (TxHash):</strong> {invoice.txHash || "Thanh toán nội bộ"}
                           </div>
-                          <span style={{
-                            fontSize: 12, padding: "4px 12px", borderRadius: 20, fontWeight: 600,
-                            background: inv.status === "paid" ? "#D1FAE5" : "#FEE2E2",
-                            color: inv.status === "paid" ? "#065F46" : "#991B1B"
-                          }}>
-                            {inv.status === "paid" ? "Đã tất toán" : "Chưa chi trả"}
-                          </span>
-                        </div>
-
-                        <div style={{ fontSize: 14, display: "flex", flexDirection: "column", gap: 6, marginBottom: 16 }}>
-                          <div><strong>Nội dung chỉ định thanh toán:</strong> {inv.description || "Chi phí dịch vụ cận lâm sàng tổng hợp"}</div>
-                          <div><strong>Định mức chi phí quy đổi:</strong> <span style={{ color: "#E11D48", fontWeight: 700, fontSize: 16 }}>{inv.amount} ETH</span></div>
-                          {inv.patientWallet && (
-                            <div><strong>Địa chỉ ví thụ hưởng bắt buộc:</strong> <code style={{ fontSize: 12, background: "#F3F4F6", padding: "2px 6px", borderRadius: 4 }}>{inv.patientWallet}</code></div>
-                          )}
-                          {inv.txHash && (
-                            <div><strong>Mã băm biên lai giao dịch (TxHash):</strong> <code style={{ fontSize: 12, color: "#2563EB", wordBreak: "break-all" }}>{inv.txHash}</code></div>
-                          )}
-                        </div>
-
-                        {inv.status !== "paid" && (
+                        )}
+                      </div>
+                      <div>
+                        {invoice.status === "paid" ? (
+                          <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>✓ Đã thanh toán</span>
+                        ) : (
                           <button 
-                            onClick={() => handlePayWithMetaMask(inv)}
-                            disabled={payingId === inv.invoiceId}
+                            onClick={() => handlePayWithMetaMask(invoice)} 
+                            disabled={payingId !== null}
                             style={{
-                              background: payingId === inv.invoiceId ? "#94A3B8" : "#2563EB",
-                              color: WHITE, border: "none", padding: "10px 20px", borderRadius: 8,
-                              cursor: payingId === inv.invoiceId ? "not-allowed" : "pointer",
-                              fontWeight: 600, fontSize: 13, display: "flex", alignItems: "center", gap: 8
+                              background: payingId === invoice.invoiceId ? GRAY_TEXT : "#10B981", color: WHITE, border: "none",
+                              padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13
                             }}
                           >
-                            {payingId === inv.invoiceId ? "🔄 Đang gọi cổng MetaMask..." : "🦊 Kích hoạt ví MetaMask & Thanh toán"}
+                            {payingId === invoice.invoiceId ? "🔄 Đang xử lý ký..." : "🦊 Trả viện phí (MetaMask)"}
                           </button>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
-            {/* ===== TAB 4: DUYỆT CẤP QUYỀN TRUY CẬP CHO BÁC SĨ ===== */}
+            {/* ===== TAB 4: QUẢN LÝ PHÂN QUYỀN TRUY CẬP HỒ SƠ CỦA BÁC SĨ ===== */}
             {tab === "access" && (
-              <div>
-                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 4 }}>🛡️ Phân quyền chia sẻ hồ sơ bệnh án phi tập trung</h4>
-                <p style={{ fontSize: 13, color: GRAY_TEXT, marginBottom: 20 }}>
-                  Danh sách bác sĩ đang yêu cầu truy cập thông tin bệnh án để chẩn đoán. Bạn kiểm soát quyền hạn bằng chữ ký mã hóa của mình.
-                </p>
-
-                {loadingAccess ? (
-                  <div style={{ fontSize: 14, color: GRAY_TEXT }}>Đang tải thông tin cấp quyền từ mạng...</div>
-                ) : accessRequests.length === 0 ? (
-                  <div style={{ background: "#F8FAFC", padding: "16px", borderRadius: 8, color: GRAY_TEXT, fontSize: 13, fontStyle: "italic", border: `1px solid ${BORDER}` }}>
-                    Hiện tại chưa có yêu cầu cấp quyền truy xuất nào từ các y bác sĩ.
-                  </div>
-                ) : (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-                    {accessRequests.map((req) => (
-                      <div key={req._id} style={{ background: WHITE, borderRadius: 10, padding: "20px", border: `1px solid ${BORDER}` }}>
-                        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12, borderBottom: `1px solid ${BORDER}`, paddingBottom: 10 }}>
-                          <div>
-                            <strong style={{ color: PRIMARY }}>Bác sĩ đề xuất: {req.doctorName || "Yêu cầu ẩn danh"}</strong>
-                            <div style={{ fontSize: 12, color: GRAY_TEXT, marginTop: 2 }}>Đơn vị: {req.hospitalName || "Hệ thống chung"}</div>
-                          </div>
-                          <span style={{
-                            fontSize: 12, padding: "4px 10px", borderRadius: 20, fontWeight: 600,
-                            background: req.status === "approved" ? "#D1FAE5" : req.status === "pending" ? "#FEF3C7" : "#FEE2E2",
-                            color: req.status === "approved" ? "#065F46" : req.status === "pending" ? "#D97706" : "#991B1B"
-                          }}>
-                            {req.status === "approved" ? "Đã ủy quyền" : req.status === "pending" ? "Đang chờ ký số" : "Từ chối"}
-                          </span>
-                        </div>
-
-                        <div style={{ fontSize: 13, color: "#374151", marginBottom: 14 }}>
-                          <div><strong>Địa chỉ định danh ví Bác sĩ:</strong> <code style={{ background: "#F3F4F6", padding: "2px 4px", borderRadius: 4 }}>{req.doctorWallet}</code></div>
-                          <div style={{ marginTop: 4 }}><strong>Lý do xin cấp quyền:</strong> Truy cứu tiền sử bệnh án phục vụ ca điều trị hiện hành.</div>
-                        </div>
-
-                        {req.status === "pending" && (
+              loadingAccess ? <div style={{ textAlign: "center", padding: 20, color: GRAY_TEXT }}>Đang tìm nạp danh sách phân quyền mật mã...</div> : accessRequests.length === 0 ? (
+                <div style={{ background: "#F8FAFC", padding: "16px", borderRadius: 8, color: GRAY_TEXT, fontSize: 13, fontStyle: "italic", border: `1px solid ${BORDER}` }}>
+                  ℹ️ Chưa có yêu cầu xin cấp quyền truy cập dữ liệu bảo mật nào từ phía Bác sĩ điều trị.
+                </div>
+              ) : (
+                <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                  <h4 style={{ color: PRIMARY, margin: "0 0 4px 0" }}>Danh sách yêu cầu phê duyệt hồ sơ từ chuyên gia khám</h4>
+                  {accessRequests.map((req) => (
+                    <div key={req._id} style={{ background: "#F8FAFC", borderRadius: 10, padding: "20px", border: `1px solid ${BORDER}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                      <div style={{ fontSize: 14, display: "flex", flexDirection: "column", gap: 4 }}>
+                        <div><strong>Họ tên Bác sĩ yêu cầu:</strong> ThS. BS {req.doctorName || "Ẩn danh"}</div>
+                        <div><strong>Cơ sở y khoa công tác:</strong> {req.hospitalName || "Cơ sở liên kết mạng lưới"}</div>
+                        <div><strong>Lý do xin cấp quyền:</strong> <span style={{ color: GRAY_TEXT, fontStyle: "italic" }}>"{req.reason || "Phục vụ công tác chẩn đoán bệnh án lâm sàng."}"</span></div>
+                        <div><strong>Định danh ví Web3 Bác sĩ:</strong> <code style={{ background: "#E5E7EB", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{req.doctorWallet}</code></div>
+                      </div>
+                      <div>
+                        {req.status === "approved" ? (
+                          <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>🛡️ Đã cấp quyền xem</span>
+                        ) : (
                           <button 
-                            onClick={() => handleApproveRequest(req)}
-                            disabled={approvingId === req._id}
+                            onClick={() => handleApproveRequest(req)} 
+                            disabled={approvingId !== null}
                             style={{
-                              background: approvingId === req._id ? "#94A3B8" : "#16A34A",
-                              color: WHITE, border: "none", padding: "8px 16px", borderRadius: 6,
-                              cursor: approvingId === req._id ? "not-allowed" : "pointer",
-                              fontWeight: 600, fontSize: 13
+                              background: approvingId === req._id ? GRAY_TEXT : PRIMARY, color: WHITE, border: "none",
+                              padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13
                             }}
                           >
-                            {approvingId === req._id ? "✍️ Đang chờ xác thực ví..." : "✓ Xác nhận Ký Số Phê Duyệt"}
+                            {approvingId === req._id ? "✍️ Đang ký mật mã..." : "✍️ Ký số Duyệt quyền"}
                           </button>
                         )}
                       </div>
-                    ))}
-                  </div>
-                )}
-              </div>
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
-            {/* ===== TAB 5: SỬA THÔNG TIN CÁ NHÂN ===== */}
+            {/* ===== TAB 5: CHỈNH SỬA LÝ LỊCH HÀNH CHÍNH ===== */}
             {tab === "edit" && (
               <div style={{ maxWidth: 600 }}>
-                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Hiệu chỉnh lý lịch hành chính</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div><label style={labelStyle}>Họ và tên công dân</label><input style={inputStyle} value={formBasic.fullName} onChange={e => setFormBasic(p => ({ ...p, fullName: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Ngày sinh (Định dạng mẫu: YYYY-MM-DD)</label><input style={inputStyle} type="date" value={formBasic.dob} onChange={e => setFormBasic(p => ({ ...p, dob: e.target.value }))} /></div>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>Thay đổi thông tin hành chính cá nhân</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 24 }}>
+                  <div>
+                    <label style={labelStyle}>Họ và tên bệnh nhân (Khai sinh)</label>
+                    <input style={inputStyle} type="text" value={formBasic.fullName} onChange={e => setFormBasic(p => ({ ...p, fullName: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Ngày tháng năm sinh (Yêu cầu khớp CCCD)</label>
+                    <input style={inputStyle} type="date" value={formBasic.dob} onChange={e => setFormBasic(p => ({ ...p, dob: e.target.value }))} />
+                  </div>
                   <div>
                     <label style={labelStyle}>Giới tính sinh học</label>
                     <select style={inputStyle} value={formBasic.gender} onChange={e => setFormBasic(p => ({ ...p, gender: e.target.value }))}>
-                      <option value="">Chọn giới tính</option>
-                      <option value="Male">Nam</option>
-                      <option value="Female">Nữ</option>
+                      <option value="">-- Chọn giới tính --</option>
+                      <option value="Male">Nam (Male)</option>
+                      <option value="Female">Nữ (Female)</option>
+                      <option value="Other">Khác (Other)</option>
                     </select>
                   </div>
-                  <div><label style={labelStyle}>Số điện thoại chính chủ</label><input style={inputStyle} value={formBasic.phone} onChange={e => setFormBasic(p => ({ ...p, phone: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Địa chỉ thường trú</label><input style={inputStyle} value={formBasic.address} onChange={e => setFormBasic(p => ({ ...p, address: e.target.value }))} /></div>
-                  <button onClick={handleSaveBasic} disabled={saving} style={{ background: PRIMARY, color: WHITE, border: "none", padding: "12px", borderRadius: 8, cursor: "pointer", fontWeight: 600, marginTop: 10 }}>
-                    {saving ? "Đang tiến hành lưu..." : "Lưu dữ liệu thay đổi"}
-                  </button>
+                  <div>
+                    <label style={labelStyle}>Số điện thoại di động liên lạc</label>
+                    <input style={inputStyle} type="text" value={formBasic.phone} onChange={e => setFormBasic(p => ({ ...p, phone: e.target.value }))} />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Địa chỉ thường trú / Tạm trú hiện nay</label>
+                    <input style={inputStyle} type="text" value={formBasic.address} onChange={e => setFormBasic(p => ({ ...p, address: e.target.value }))} />
+                  </div>
                 </div>
+                <button onClick={handleSaveBasic} disabled={saving} style={{
+                  background: PRIMARY, color: WHITE, border: "none", padding: "12px 24px",
+                  borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14, width: "100%"
+                }}>
+                  {saving ? "Đang đồng bộ cơ sở dữ liệu..." : "Lưu thay đổi hồ sơ hành chính"}
+                </button>
               </div>
             )}
 
-            {/* ===== TAB 6: HIỆU CHỈNH HỒ SƠ SỨC KHỎE KHAI BÁO ===== */}
+            {/* ===== TAB 6: CHỈNH SỬA TIỀN SỬ SỨC KHỎE THƯỜNG THỨC ===== */}
             {tab === "health" && (
               <div style={{ maxWidth: 600 }}>
-                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 16 }}>Hiệu chỉnh hồ sơ sức khỏe khai báo ban đầu</h4>
-                <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-                  <div><label style={labelStyle}>Nhóm máu hệ ABO</label><input style={inputStyle} value={formHealth.nhomMau} onChange={e => setFormHealth(p => ({ ...p, nhomMau: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Tiền sử bệnh lý gia đình / cá nhân trước đây</label><input style={inputStyle} value={formHealth.tienSuBenh} onChange={e => setFormHealth(p => ({ ...p, tienSuBenh: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Các chất dị ứng nguy hại ghi nhận</label><input style={inputStyle} value={formHealth.diUng} onChange={e => setFormHealth(p => ({ ...p, diUng: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Triệu chứng lâm sàng bổ sung thêm</label><input style={inputStyle} value={formHealth.trieuChung} onChange={e => setFormHealth(p => ({ ...p, trieuChung: e.target.value }))} /></div>
-                  <div><label style={labelStyle}>Lời nhắn/Ghi chú gửi tới Hội đồng Bác sĩ</label><textarea style={{ ...inputStyle, height: 80, resize: "none" }} value={formHealth.ghiChu} onChange={e => setFormHealth(p => ({ ...p, ghiChu: e.target.value }))} /></div>
-                  <button onClick={handleSaveHealth} disabled={saving} style={{ background: PRIMARY, color: WHITE, border: "none", padding: "12px", borderRadius: 8, cursor: "pointer", fontWeight: 600, marginTop: 10 }}>
-                    {saving ? "Đang cập nhật..." : "Xác nhận cập nhật hồ sơ"}
-                  </button>
+                <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>Cập nhật bổ sung chỉ số trạng thái y sinh</h4>
+                <div style={{ display: "grid", gridTemplateColumns: "1fr", gap: 16, marginBottom: 24 }}>
+                  <div>
+                    <label style={labelStyle}>Hệ nhóm máu</label>
+                    <select style={inputStyle} value={formHealth.nhomMau} onChange={e => setFormHealth(p => ({ ...p, nhomMau: e.target.value }))}>
+                      <option value="">-- Chưa xác định cụ thể --</option>
+                      <option value="A+">Nhóm máu A+</option>
+                      <option value="A-">Nhóm máu A-</option>
+                      <option value="B+">Nhóm máu B+</option>
+                      <option value="B-">Nhóm máu B-</option>
+                      <option value="O+">Nhóm máu O+</option>
+                      <option value="O-">Nhóm máu O-</option>
+                      <option value="AB+">Nhóm máu AB+</option>
+                      <option value="AB-">Nhóm máu AB-</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Tiền sử dị ứng vật tư / Dược phẩm / Thực phẩm</label>
+                    <input style={inputStyle} type="text" value={formHealth.diUng} onChange={e => setFormHealth(p => ({ ...p, diUng: e.target.value }))} placeholder="Ví dụ: Dị ứng Penicillin, hải sản..." />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Bệnh lý nền mãn tính mắc phải</label>
+                    <input style={inputStyle} type="text" value={formHealth.tienSuBenh} onChange={e => setFormHealth(p => ({ ...p, tienSuBenh: e.target.value }))} placeholder="Ví dụ: Cao huyết áp, tiểu đường Type 2..." />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Triệu chứng lâm sàng ghi nhận tự thân gần đây</label>
+                    <input style={inputStyle} type="text" value={formHealth.trieuChung} onChange={e => setFormHealth(p => ({ ...p, trieuChung: e.target.value }))} placeholder="Ví dụ: Thường xuyên đau đầu râm ran mệt mỏi..." />
+                  </div>
+                  <div>
+                    <label style={labelStyle}>Ghi chú mở rộng thêm</label>
+                    <textarea style={{ ...inputStyle, height: 80, resize: "none" }} value={formHealth.ghiChu} onChange={e => setFormHealth(p => ({ ...p, ghiChu: e.target.value }))} placeholder="Các lưu ý đặc biệt khác cho bác sĩ khi kê đơn thuốc..." />
+                  </div>
                 </div>
+                <button onClick={handleSaveHealth} disabled={saving} style={{
+                  background: PRIMARY, color: WHITE, border: "none", padding: "12px 24px",
+                  borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 14, width: "100%"
+                }}>
+                  {saving ? "Đang cập nhật hồ sơ y tế ngầm..." : "Xác nhận cập nhật dữ liệu trạng thái sức khỏe"}
+                </button>
               </div>
             )}
           </div>
