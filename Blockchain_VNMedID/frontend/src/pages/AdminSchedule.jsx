@@ -33,6 +33,16 @@ const ShiftBadge = ({ shift }) => {
 
 const DAYS_VI = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
+const toLocalDateString = (dateInput) => {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  const YYYY = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  return `${YYYY}-${MM}-${DD}`;
+};
+
 export default function AdminSchedule() {
   const token = localStorage.getItem("token")
   const today = new Date() 
@@ -41,15 +51,18 @@ export default function AdminSchedule() {
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDoctor, setFilterDoctor] = useState("")
-  const [filterDate, setFilterDate] = useState("")
+  
+  const formattedToday = toLocalDateString(today);
+
+  const [filterDate, setFilterDate] = useState(formattedToday)
   const [filterShift, setFilterShift] = useState("")
   const [viewMode, setViewMode] = useState("table") 
 
   // Modal tạo mới
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({
-    doctorId: "", date: "2026-06-25", shift: "morning", 
-    room: "Phòng 101", note: "", status: "active"
+    doctorId: "", date: formattedToday, shift: "morning", 
+    room: "101", note: "", status: "active", maxPatients: 9
   })
   const [creating, setCreating] = useState(false)
   const [bulkProgress, setBulkProgress] = useState({ current: 0, total: 0 })
@@ -79,29 +92,45 @@ export default function AdminSchedule() {
     setLoading(true)
     const params = {}
     if (filterDoctor) params.doctorId = filterDoctor
-    if (filterDate) params.date = filterDate
+    if (filterDate) params.date = toLocalDateString(filterDate)
     if (filterShift) params.shift = filterShift
     
     axios.get(`${BASE_URL}/shifts`, {
       headers: { Authorization: `Bearer ${token}` }, params
     })
     .then(res => {
-      const data = res.data?.data?.schedules || res.data?.data || res.data?.shifts || [];
+      // Bóc tách linh hoạt cấu trúc data trả về từ API
+      const data = res.data?.data?.schedules || res.data?.data || res.data?.shifts || res.data || [];
       setSchedules(Array.isArray(data) ? data : []);
     })
     .catch(err => console.error("Lỗi fetchSchedules:", err))
     .finally(() => setLoading(false))
   }
 
+  // ✅ SỬA ĐỂ KHÔNG BỊ RỖNG DOCTORS: Tự động đoán cấu trúc array của Backend
   const fetchDoctors = () => {
     axios.get(`${BASE_URL}/doctors`, {
       headers: { Authorization: `Bearer ${token}` }
     })
     .then(res => {
-      const data = res.data?.data?.doctors || res.data?.data || [];
-      setDoctors(Array.isArray(data) ? data : []);
+      console.log("Dữ liệu bác sĩ từ API trả về:", res.data); // Xem log ở F12 xem cấu trúc trả về là gì
+      
+      let rawDocs = [];
+      if (Array.isArray(res.data)) {
+        rawDocs = res.data;
+      } else if (res.data?.data && Array.isArray(res.data.data)) {
+        rawDocs = res.data.data;
+      } else if (res.data?.data?.doctors && Array.isArray(res.data.data.doctors)) {
+        rawDocs = res.data.data.doctors;
+      } else if (res.data?.doctors && Array.isArray(res.data.doctors)) {
+        rawDocs = res.data.doctors;
+      }
+
+      setDoctors(rawDocs);
     })
-    .catch(err => console.error("Lỗi fetchDoctors:", err))
+    .catch(err => {
+      console.error("Lỗi nghiêm trọng khi fetchDoctors:", err);
+    })
   }
 
   useEffect(() => { 
@@ -110,7 +139,7 @@ export default function AdminSchedule() {
   }, [])
 
   const handleTriggerAutoSchedule = async () => {
-    if (!window.confirm("Bạn có muốn hệ thống tự động phân lịch cố định (10 bác sĩ/chuyên khoa, 26 buổi/tháng) không?")) return;
+    if (!window.confirm("Bạn có muốn hệ thống tự động phân lịch cố định không?")) return;
     setLoading(true);
     try {
       const response = await axios.post(`${BASE_URL}/shifts/auto-schedule`, {
@@ -138,24 +167,13 @@ export default function AdminSchedule() {
       return
     }
 
-    let selectedDate = createForm.date;
-    try {
-      const d = new Date(createForm.date);
-      if (isNaN(d.getTime()) || d.getFullYear() < 2000) {
-        selectedDate = new Date().toISOString().slice(0, 10);
-      } else {
-        selectedDate = d.toISOString().slice(0, 10);
-      }
-    } catch (e) {
-      selectedDate = "2026-06-25"; 
-    }
-
+    let selectedDate = toLocalDateString(createForm.date) || formattedToday;
     setCreating(true)
 
     // TRƯỜNG HỢP TẠO HÀNG LOẠT CHO TẤT CẢ BÁC SĨ
     if (createForm.doctorId === "ALL_DOCTORS") {
-      if (doctors.length === 0) {
-        alert("Không có bác sĩ nào trong danh sách để tạo lịch!")
+      if (!doctors || doctors.length === 0) {
+        alert(`Không thể tạo! Hiện tại danh sách bác sĩ trên hệ thống đang trống (Lấy về từ: ${BASE_URL}/doctors). Vui lòng kiểm tra lại data hoặc Token.`);
         setCreating(false)
         return
       }
@@ -173,14 +191,14 @@ export default function AdminSchedule() {
 
         setBulkProgress({ current: i + 1, total: doctors.length })
         
-        // Đính kèm dữ liệu chuẩn xác của từng bác sĩ để tránh trống tên trong Database
         const batchPayload = {
           doctorId: doc._id,
           date: selectedDate,
           shift: createForm.shift || "morning",
-          room: createForm.room || "Phòng 101",
+          room: createForm.room || "101",
           note: createForm.note || "",
           status: createForm.status || "active",
+          maxPatients: Number(createForm.maxPatients) || 9,
           doctorName: doc.fullName || doc["Họ và tên"] || "Bác sĩ",
           specialty: doc.specialty || doc["Chuyên khoa"] || "Đa khoa"
         };
@@ -191,14 +209,14 @@ export default function AdminSchedule() {
           });
           successCount++;
         } catch (err) {
-          console.error(`Lỗi tạo lịch cho bác sĩ ${doc.fullName || 'BN'}:`, err.response?.data || err);
+          console.error("Lỗi tạo lịch cho 1 bác sĩ trong danh sách:", err);
           failCount++;
         }
       }
 
       alert(`Hoàn thành! Tạo thành công ${successCount} lịch trực. Thất bại: ${failCount}.`);
       setShowCreate(false)
-      setCreateForm({ doctorId: "", date: "2026-06-25", shift: "morning", room: "Phòng 101", note: "", status: "active" })
+      setCreateForm({ doctorId: "", date: formattedToday, shift: "morning", room: "101", note: "", status: "active", maxPatients: 9 })
       fetchSchedules()
       setCreating(false)
       return;
@@ -210,9 +228,10 @@ export default function AdminSchedule() {
       doctorId: createForm.doctorId,
       date: selectedDate,
       shift: createForm.shift || "morning",
-      room: createForm.room || "Phòng 101",
+      room: createForm.room || "101",
       note: createForm.note || "",
       status: createForm.status || "active",
+      maxPatients: Number(createForm.maxPatients) || 9,
       doctorName: currentDoc ? (currentDoc.fullName || currentDoc["Họ và tên"]) : "Bác sĩ",
       specialty: currentDoc ? (currentDoc.specialty || currentDoc["Chuyên khoa"]) : "Đa khoa"
     };
@@ -222,7 +241,7 @@ export default function AdminSchedule() {
         headers: { Authorization: `Bearer ${token}` }
       })
       setShowCreate(false)
-      setCreateForm({ doctorId: "", date: "2026-06-25", shift: "morning", room: "Phòng 101", note: "", status: "active" })
+      setCreateForm({ doctorId: "", date: formattedToday, shift: "morning", room: "101", note: "", status: "active", maxPatients: 9 })
       fetchSchedules()
     } catch (err) {
       alert("Lỗi tạo lịch: " + (err.response?.data?.message || err.message))
@@ -231,18 +250,7 @@ export default function AdminSchedule() {
 
   const openEdit = (s) => {
     if (!s) return;
-    
-    let formattedDate = "";
-    if (s.date) {
-      try {
-        formattedDate = new Date(s.date).toISOString().slice(0, 10);
-      } catch (e) {
-        if (typeof s.date === 'string') {
-          formattedDate = s.date.slice(0, 10);
-        }
-      }
-    }
-
+    let formattedDate = toLocalDateString(s.date);
     setEditTarget(s._id)
     setEditForm({
       doctorId: s.doctorId?._id || s.doctorId || "",
@@ -251,13 +259,19 @@ export default function AdminSchedule() {
       room: s.room || "",
       note: s.note || "",
       status: s.status || "active",
+      maxPatients: s.maxPatients || 9
     })
   }
 
   const handleSave = async () => {
     setSaving(true)
     try {
-      await axios.put(`${BASE_URL}/shifts/${editTarget}`, editForm, {
+      const updatePayload = {
+        ...editForm,
+        date: toLocalDateString(editForm.date),
+        maxPatients: Number(editForm.maxPatients)
+      };
+      await axios.put(`${BASE_URL}/shifts/${editTarget}`, updatePayload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setEditTarget(null)
@@ -296,15 +310,11 @@ export default function AdminSchedule() {
 
   const getSchedulesForDay = (date) => {
     if (!date) return [];
-    const dateStr = date.toISOString().slice(0, 10)
+    const dateStr = toLocalDateString(date);
     return schedules.filter(s => {
       if (!s.date) return false;
-      try {
-        const sDate = new Date(s.date).toISOString().slice(0, 10)
-        return sDate === dateStr
-      } catch (e) {
-        return false;
-      }
+      const sDate = toLocalDateString(s.date);
+      return sDate === dateStr;
     })
   }
 
@@ -343,13 +353,11 @@ export default function AdminSchedule() {
       </div>
       <div>
         <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Phòng khám</label>
-        <input 
-          type="text" 
-          value={form.room || ""} 
-          onChange={e => setForm({ ...form, room: e.target.value })} 
-          placeholder="VD: Phòng 101, P.A1..." 
-          style={inputStyle} 
-        />
+        <input type="text" value={form.room || ""} onChange={e => setForm({ ...form, room: e.target.value })} placeholder="VD: Phòng 101..." style={inputStyle} />
+      </div>
+      <div>
+        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Số BN tối đa (Mỗi bác sĩ)</label>
+        <input type="number" value={form.maxPatients || ""} onChange={e => setForm({ ...form, maxPatients: e.target.value })} style={inputStyle} />
       </div>
       <div>
         <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Trạng thái</label>
@@ -361,7 +369,7 @@ export default function AdminSchedule() {
       </div>
       <div style={{ gridColumn: "1 / -1" }}>
         <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ghi chú</label>
-        <input type="text" value={form.note || ""} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Ghi chú thêm về ca trực..." style={inputStyle} />
+        <input type="text" value={form.note || ""} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Ghi chú thêm..." style={inputStyle} />
       </div>
     </div>
   )
@@ -376,15 +384,22 @@ export default function AdminSchedule() {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={handleTriggerAutoSchedule}
-            style={{ background: "#16A34A", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            style={{ background: "#16A34A", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ⚡ Tự động xếp lịch
           </button>
           <button onClick={() => setShowCreate(true)}
-            style={{ background: PRIMARY, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14, display: "flex", alignItems: "center", gap: 6 }}>
+            style={{ background: PRIMARY, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ＋ Tạo lịch mới
           </button>
         </div>
       </div>
+
+      {/* Cảnh báo nếu fetch bác sĩ thất bại */}
+      {doctors.length === 0 && !loading && (
+        <div style={{ background: WARNING_LIGHT, color: WARNING, padding: "10px 14px", borderRadius: 8, marginBottom: 16, fontSize: 13, fontWeight: 600 }}>
+          ⚠️ Cảnh báo: Hiện hệ thống không lấy được danh sách Bác sĩ nào từ API. Vui lòng kiểm tra lại Database Collection `doctors` hoặc log mạng.
+        </div>
+      )}
 
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
@@ -417,9 +432,7 @@ export default function AdminSchedule() {
               </button>
             ))}
           </div>
-
           <div style={{ width: 1, height: 28, background: BORDER }} />
-
           <select value={filterDoctor} onChange={e => setFilterDoctor(e.target.value)} style={{ ...inputStyle, width: 200, flex: "none" }}>
             <option value="">Tất cả bác sĩ</option>
             {doctors.map(d => (
@@ -432,16 +445,7 @@ export default function AdminSchedule() {
             <option value="morning">🌅 Ca sáng</option>
             <option value="afternoon">☀️ Ca chiều</option>
           </select>
-          <button onClick={fetchSchedules}
-            style={{ background: PRIMARY, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600, fontSize: 13 }}>
-            🔍 Lọc
-          </button>
-          {(filterDoctor || filterDate || filterShift) && (
-            <button onClick={() => { setFilterDoctor(""); setFilterDate(""); setFilterShift(""); setTimeout(fetchSchedules, 50) }}
-              style={{ background: "#F1F5F9", color: GRAY_TEXT, border: "none", padding: "8px 14px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>
-              ✕ Xóa lọc
-            </button>
-          )}
+          <button onClick={fetchSchedules} style={{ background: PRIMARY, color: "#fff", border: "none", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontWeight: 600 }}>🔍 Lọc</button>
         </div>
       </div>
 
@@ -458,57 +462,39 @@ export default function AdminSchedule() {
             </thead>
             <tbody>
               {loading ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: GRAY_TEXT }}>
-                  <div style={{ fontSize: 28, marginBottom: 8 }}>⏳</div>Đang tải dữ liệu...
-                </td></tr>
+                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: GRAY_TEXT }}>⏳ Đang tải dữ liệu...</td></tr>
               ) : schedules.length === 0 ? (
-                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: GRAY_TEXT, fontStyle: "italic" }}>
-                  <div style={{ fontSize: 32, marginBottom: 8 }}>📭</div>Chưa có lịch trực nào.
-                </td></tr>
+                <tr><td colSpan={8} style={{ textAlign: "center", padding: 40, color: GRAY_TEXT, fontStyle: "italic" }}>📭 Chưa có lịch trực nào.</td></tr>
               ) : schedules.map((s, i) => {
                 const dateObj = s.date ? new Date(s.date) : null
                 const dayLabel = dateObj ? DAYS_VI[dateObj.getDay()] : ""
                 return (
                   <tr key={s._id} style={{ background: i % 2 === 0 ? "#fff" : "#FAFBFC", borderBottom: `1px solid ${BORDER}` }}>
                     <td style={{ padding: "12px 14px", fontWeight: 700, color: PRIMARY_MED }}>#{i + 1}</td>
+                    <td style={{ padding: "12px 14px", fontWeight: 600 }}>{s.doctorId?.fullName || s.doctorName || s.doctorId?.["Họ và tên"] || "—"}</td>
                     <td style={{ padding: "12px 14px" }}>
-                      <div style={{ fontWeight: 600, color: "#1E293B" }}>
-                        {s.doctorId?.fullName || s.doctorName || s.doctorId?.["Họ và tên"] || "—"}
-                      </div>
-                    </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      {(s.doctorId?.specialty || s.specialty) ? (
+                      {(s.doctorId?.specialty || s.specialty) && (
                         <span style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
                           {s.doctorId?.specialty || s.specialty}
                         </span>
-                      ) : "—"}
+                      )}
                     </td>
                     <td style={{ padding: "12px 14px" }}>
-                      <div style={{ fontWeight: 600, color: "#1E293B", fontSize: 13 }}>
-                        {dateObj ? dateObj.toLocaleDateString("vi-VN") : "—"}
-                      </div>
-                      {dayLabel && <div style={{ fontSize: 11, color: PRIMARY_MED, fontWeight: 600 }}>{dayLabel}</div>}
+                      <div style={{ fontWeight: 600 }}>{dateObj ? dateObj.toLocaleDateString("vi-VN") : "—"}</div>
+                      {dayLabel && <div style={{ fontSize: 11, color: PRIMARY_MED }}>{dayLabel}</div>}
                     </td>
-                    <td style={{ padding: "12px 14px" }}>
-                      <ShiftBadge shift={s.shift} />
-                    </td>
-                    <td style={{ padding: "12px 14px", color: "#475569", fontSize: 13 }}>
-                      {s.room || <span style={{ color: "#CBD5E1" }}>—</span>}
-                    </td>
+                    <td style={{ padding: "12px 14px" }}><ShiftBadge shift={s.shift} /></td>
+                    <td style={{ padding: "12px 14px" }}>{s.room || "—"}</td>
                     <td style={{ padding: "12px 14px" }}>
                       {(() => {
                         const stt = getStatusLabel(s.date);
-                        return (
-                          <span style={{ background: stt.bg, color: stt.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>
-                            {stt.icon} {stt.label}
-                          </span>
-                        );
+                        return <span style={{ background: stt.bg, color: stt.color, padding: "3px 10px", borderRadius: 20, fontSize: 12, fontWeight: 600 }}>{stt.label}</span>
                       })()}
                     </td>
                     <td style={{ padding: "12px 14px" }}>
                       <div style={{ display: "flex", gap: 6 }}>
-                        <button onClick={() => openEdit(s)} style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>✏️ Sửa</button>
-                        <button onClick={() => setConfirmDelete(s)} style={{ background: "#FEE2E2", color: ERROR, border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12, fontWeight: 600 }}>🗑</button>
+                        <button onClick={() => openEdit(s)} style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>✏️ Sửa</button>
+                        <button onClick={() => setConfirmDelete(s)} style={{ background: "#FEE2E2", color: ERROR, border: "none", padding: "6px 12px", borderRadius: 6, cursor: "pointer", fontSize: 12 }}>🗑</button>
                       </div>
                     </td>
                   </tr>
@@ -522,45 +508,24 @@ export default function AdminSchedule() {
       {/* WEEK VIEW */}
       {viewMode === "week" && (
         <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", overflow: "hidden", border: `1px solid ${BORDER}` }}>
-          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", borderBottom: `1px solid ${BORDER}`, background: PRIMARY_LIGHT }}>
-            <button onClick={() => setWeekOffset(w => w - 1)} style={{ background: "#fff", border: `1px solid ${BORDER}`, padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 600, color: PRIMARY }}>← Tuần trước</button>
-            <span style={{ fontWeight: 700, color: PRIMARY, fontSize: 15 }}>📅 Tuần {weekDays[0].toLocaleDateString("vi-VN")} – {weekDays[6].toLocaleDateString("vi-VN")}</span>
-            <div style={{ display: "flex", gap: 8 }}>
-              {weekOffset !== 0 && (
-                <button onClick={() => setWeekOffset(0)} style={{ background: PRIMARY_LIGHT, border: `1px solid ${BORDER}`, padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 600, color: PRIMARY, fontSize: 12 }}>Tuần này</button>
-              )}
-              <button onClick={() => setWeekOffset(w => w + 1)} style={{ background: "#fff", border: `1px solid ${BORDER}`, padding: "6px 14px", borderRadius: 8, cursor: "pointer", fontWeight: 600, color: PRIMARY }}>Tuần sau →</button>
-            </div>
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "14px 20px", background: PRIMARY_LIGHT }}>
+            <button onClick={() => setWeekOffset(w => w - 1)} style={{ padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>← Tuần trước</button>
+            <span style={{ fontWeight: 700 }}>📅 Tuần {weekDays[0].toLocaleDateString("vi-VN")} – {weekDays[6].toLocaleDateString("vi-VN")}</span>
+            <button onClick={() => setWeekOffset(w => w + 1)} style={{ padding: "6px 14px", borderRadius: 8, cursor: "pointer" }}>Tuần sau →</button>
           </div>
-
-          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${BORDER}` }}>
+          <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
             {weekDays.map((day, i) => {
-              const isToday = day.toDateString() === today.toDateString()
               const daySchedules = getSchedulesForDay(day)
               return (
-                <div key={i} style={{ borderRight: i < 6 ? `1px solid ${BORDER}` : "none", minHeight: 180 }}>
-                  <div style={{ padding: "10px 12px", borderBottom: `1px solid ${BORDER}`, background: isToday ? PRIMARY : "#F8FAFC", textAlign: "center" }}>
-                    <div style={{ fontSize: 11, fontWeight: 600, color: isToday ? "rgba(255,255,255,0.8)" : GRAY_TEXT, marginBottom: 2 }}>{DAYS_VI[day.getDay()]}</div>
-                    <div style={{ fontSize: 20, fontWeight: 700, color: isToday ? "#fff" : PRIMARY }}>{day.getDate()}</div>
-                    <div style={{ fontSize: 11, color: isToday ? "rgba(255,255,255,0.7)" : GRAY_TEXT }}>{day.toLocaleDateString("vi-VN", { month: "short" })}</div>
-                  </div>
-
-                  <div style={{ padding: "8px 6px", display: "flex", flexDirection: "column", gap: 6 }}>
-                    {daySchedules.length === 0 ? (
-                      <div style={{ textAlign: "center", padding: "16px 4px", color: "#CBD5E1", fontSize: 11 }}>Trống</div>
-                    ) : daySchedules.map(s => {
-                      const sh = SHIFT_MAP[s.shift] || { icon: "📅", color: PRIMARY_MED, bg: PRIMARY_LIGHT, label: s.shift }
-                      return (
-                        <div key={s._id} onClick={() => openEdit(s)} title={`${s.doctorId?.fullName || "—"} – ${sh.label}`}
-                          style={{ background: sh.bg, borderRadius: 6, padding: "6px 8px", cursor: "pointer", borderLeft: `3px solid ${sh.color}`, fontSize: 11 }}>
-                          <div style={{ fontWeight: 700, color: sh.color, marginBottom: 1 }}>{sh.icon} {sh.label}</div>
-                          <div style={{ color: "#1E293B", fontWeight: 600, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
-                            {s.doctorId?.fullName || s.doctorName || "—"}
-                          </div>
-                          {s.room && <div style={{ color: GRAY_TEXT, fontSize: 10 }}>🚪 {s.room}</div>}
-                        </div>
-                      )
-                    })}
+                <div key={i} style={{ borderRight: `1px solid ${BORDER}`, minHeight: 150, padding: 8 }}>
+                  <div style={{ textTransform: "uppercase", fontSize: 11, color: GRAY_TEXT, textAlign: "center" }}>{DAYS_VI[day.getDay()]}</div>
+                  <div style={{ fontSize: 18, fontWeight: 700, textAlign: "center", color: PRIMARY }}>{day.getDate()}</div>
+                  <div style={{ marginTop: 8, display: "flex", flexDirection: "column", gap: 4 }}>
+                    {daySchedules.map(s => (
+                      <div key={s._id} style={{ background: PRIMARY_LIGHT, fontSize: 11, padding: 4, borderRadius: 4, borderLeft: `3px solid ${PRIMARY_MED}` }}>
+                        <strong>{s.shift === 'morning' ? 'Sáng' : 'Chiều'}</strong>: {s.doctorId?.fullName || s.doctorName || "Bác sĩ"}
+                      </div>
+                    ))}
                   </div>
                 </div>
               )
@@ -572,17 +537,12 @@ export default function AdminSchedule() {
       {/* Modal Tạo mới */}
       {showCreate && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560 }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>📅 Tạo lịch trực mới</h3>
             <FormFields form={createForm} setForm={setCreateForm} isEdit={false} />
-            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24, alignItems: "center" }}>
-              {creating && bulkProgress.total > 0 && (
-                <span style={{ fontSize: 13, color: PRIMARY_MED, fontWeight: 600, marginRight: "auto" }}>
-                  ⏳ Đang xử lý: {bulkProgress.current} / {bulkProgress.total} bác sĩ...
-                </span>
-              )}
-              <button onClick={() => setShowCreate(false)} disabled={creating} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
-              <button onClick={handleCreate} disabled={creating} style={{ padding: "9px 24px", borderRadius: 8, border: "none", background: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+              <button onClick={() => setShowCreate(false)} style={{ padding: "9px 20px", borderRadius: 8, background: "#fff" }}>Hủy</button>
+              <button onClick={handleCreate} disabled={creating} style={{ padding: "9px 24px", borderRadius: 8, background: PRIMARY, color: "#fff", cursor: "pointer" }}>
                 {creating ? "Đang xử lý..." : "✅ Tạo lịch"}
               </button>
             </div>
@@ -593,12 +553,12 @@ export default function AdminSchedule() {
       {/* Modal Sửa */}
       {editTarget && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560, boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560 }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>✏️ Chỉnh sửa lịch trực</h3>
             <FormFields form={editForm} setForm={setEditForm} isEdit={true} />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
-              <button onClick={() => setEditTarget(null)} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
-              <button onClick={handleSave} disabled={saving} style={{ padding: "9px 24px", borderRadius: 8, border: "none", background: PRIMARY, color: "#fff", cursor: "pointer", fontWeight: 600 }}>
+              <button onClick={() => setEditTarget(null)} style={{ padding: "9px 20px", borderRadius: 8, background: "#fff" }}>Hủy</button>
+              <button onClick={handleSave} disabled={saving} style={{ padding: "9px 24px", borderRadius: 8, background: PRIMARY, color: "#fff" }}>
                 {saving ? "Đang lưu..." : "💾 Lưu"}
               </button>
             </div>
@@ -609,16 +569,12 @@ export default function AdminSchedule() {
       {/* Modal Xác nhận Xóa */}
       {confirmDelete && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 400, textAlign: "center", boxShadow: "0 24px 64px rgba(0,0,0,0.18)" }}>
-            <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
-            <h3 style={{ color: PRIMARY, marginTop: 0 }}>Xác nhận xóa lịch</h3>
-            <p style={{ color: GRAY_TEXT, fontSize: 14 }}>
-              Xóa lịch trực của <strong>{confirmDelete.doctorId?.fullName || "bác sĩ này"}</strong> ngày <strong>{confirmDelete.date ? new Date(confirmDelete.date).toLocaleDateString("vi-VN") : ""}</strong>?
-              <br />Hành động này không thể hoàn tác.
-            </p>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
+            <h3>Xác nhận xóa lịch</h3>
+            <p>Xóa lịch trực này? Hành động không thể hoàn tác.</p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 24 }}>
-              <button onClick={() => setConfirmDelete(null)} style={{ padding: "9px 24px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", color: GRAY_TEXT, cursor: "pointer", fontWeight: 600 }}>Hủy</button>
-              <button onClick={() => handleDelete(confirmDelete._id)} style={{ padding: "9px 24px", borderRadius: 8, border: "none", background: ERROR, color: "#fff", cursor: "pointer", fontWeight: 600 }}>🗑 Xóa</button>
+              <button onClick={() => setConfirmDelete(null)} style={{ padding: "9px 24px", borderRadius: 8 }}>Hủy</button>
+              <button onClick={() => handleDelete(confirmDelete._id)} style={{ padding: "9px 24px", borderRadius: 8, background: ERROR, color: "#fff" }}>🗑 Xóa</button>
             </div>
           </div>
         </div>
