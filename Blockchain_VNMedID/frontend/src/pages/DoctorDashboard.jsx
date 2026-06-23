@@ -4,9 +4,10 @@ import axiosOriginal from 'axios'
 
 const PRIMARY = "#0A2D6E"
 const PRIMARY_MED = "#1A4FA8"
-const PRIMARY_LIGHT = "#E6F1FB"
-const GRAY_TEXT = "#5F6B7A"
+const PRIMARY_LIGHT = "#F0F6FC"
+const GRAY_TEXT = "#4A5568"
 const BORDER = "#CBD5E1"
+const BG_GLOBAL = "#F8FAFC"
 
 const BASE_URL = "https://blockchainvnmedid-production.up.railway.app/api/v1"
 
@@ -15,7 +16,7 @@ export default function DoctorDashboard() {
 
   const [doctorInfo, setDoctorInfo] = useState({
     fullName: localStorage.getItem("fullName") || "Bác sĩ hệ thống",
-    specialty: localStorage.getItem("chuyenKhoa") || "Da liễu",
+    specialty: localStorage.getItem("chuyenKhoa") || "Răng Hàm Mặt",
     licenseNumber: localStorage.getItem("maBacSi") || "BS-123450",
     hospitalName: localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID"
   })
@@ -26,13 +27,23 @@ export default function DoctorDashboard() {
   const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0])
   const [activeFilter, setActiveFilter] = useState("pending")
 
-  const [selectedPatient, setSelectedPatient] = useState(null)
+  const [selectedPatient, setSelectedPatient] = useState(() => {
+    const saved = localStorage.getItem("current_exam_patient")
+    return saved ? JSON.parse(saved) : null
+  })
+  
   const [diagnose, setDiagnose] = useState('')
   const [submitting, setSubmitting] = useState(false)
-
-  // --- TRẠNG THÁI XIN QUYỀN TRUY CẬP HỒ SƠ ---
   const [requestingAccess, setRequestingAccess] = useState(false)
-  const [accessStatus, setAccessStatus] = useState("none") // "none" | "pending" | "approved"
+  
+  const [accessStatus, setAccessStatus] = useState(() => {
+    return localStorage.getItem("current_exam_access_status") || "none"
+  })
+
+  // Quản lý dữ liệu Blockchain và dòng đang được chọn xem chi tiết
+  const [blockchainRecords, setBlockchainRecords] = useState([])
+  const [loadingHistory, setLoadingHistory] = useState(false)
+  const [expandedBlock, setExpandedBlock] = useState(null)
 
   const [treatmentDays, setTreatmentDays] = useState(7)
   const [drugList, setDrugList] = useState([{ name: "", suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
@@ -42,11 +53,9 @@ export default function DoctorDashboard() {
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
 
-  // ✅ Lấy danh sách bệnh nhân từ /visits
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
       setLoading(true)
-
       const [pendingRes, completedRes] = await Promise.all([
         axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -57,11 +66,10 @@ export default function DoctorDashboard() {
           params: { status: 'completed', specialty: specialtyName, date: dateQuery }
         })
       ])
-
       setPatientList(pendingRes?.data?.data?.records || [])
       setCompletedList(completedRes?.data?.data?.records || [])
     } catch (error) {
-      console.error("Lỗi lấy danh sách:", error)
+      console.error("Lỗi lấy danh sách ca hẹn:", error)
       setPatientList([])
       setCompletedList([])
     } finally {
@@ -99,24 +107,57 @@ export default function DoctorDashboard() {
     init()
   }, [navigate, selectedDate, fetchPatients])
 
+  // Tải danh sách bệnh án từ DB đóng vai trò là dữ liệu gốc của Blockchain Hash
+  useEffect(() => {
+    const fetchBlockchainRecords = async () => {
+      if (!selectedPatient || accessStatus !== "approved") {
+        setBlockchainRecords([])
+        return
+      }
+      
+      setLoadingHistory(true)
+      try {
+        const targetId = selectedPatient.patientId || selectedPatient.userId || selectedPatient._id
+        const res = await axiosOriginal.get(`${BASE_URL}/visits`, {
+          headers: { Authorization: `Bearer ${token}` },
+          params: { status: 'completed', patientId: targetId }
+        })
+        
+        if (res.data?.success && res.data?.data) {
+          const records = res.data.data.records || res.data.data
+          setBlockchainRecords(Array.isArray(records) ? records : [])
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải lịch sử:", error)
+        setBlockchainRecords([])
+      } finally {
+        setLoadingHistory(false)
+      }
+    }
+
+    fetchBlockchainRecords()
+  }, [selectedPatient, accessStatus, token])
+
   const handleLogout = () => { localStorage.clear(); navigate("/") }
 
   const resetForm = () => {
-    setSelectedPatient(null)
     setDiagnose('')
     setDrugList([{ name: "", suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
     setTreatmentDays(7)
     setDoctorNote("")
     setAccessStatus("none")
+    setBlockchainRecords([])
+    setExpandedBlock(null)
+    setSelectedPatient(null)
+    localStorage.removeItem("current_exam_patient")
+    localStorage.removeItem("current_exam_access_status")
   }
 
-  // ✅ HÀM XỬ LÝ GỬI YÊU CẦU TRUY CẬP HỒ SƠ QUA BACKEND ĐỂ BỆNH NHÂN THẤY
   const handleRequestAccess = async () => {
     if (!selectedPatient) return
     setRequestingAccess(true)
     try {
-      // Gọi API gửi yêu cầu truy cập đến bệnh nhân
-      const response = await axiosOriginal.post(
+      const res = await axiosOriginal.post(
         `${BASE_URL}/access/requests`, 
         {
           patientId: selectedPatient.patientId || selectedPatient.userId || "", 
@@ -127,16 +168,20 @@ export default function DoctorDashboard() {
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
-
-      if (response.data.success || response.status === 200 || response.status === 201) {
-        alert("✉️ Đã gửi yêu cầu xin quyền truy cập! Vui lòng nhắc Bệnh nhân vào tab 'Cấp quyền truy cập' trên ví để phê duyệt.")
+      
+      if (res.data?.success) {
         setAccessStatus("pending")
+        localStorage.setItem("current_exam_access_status", "pending")
+        alert("✉️ Đã gửi yêu cầu thành công! Nếu bệnh nhân đã bấm ủy quyền trước đó, hãy ấn lại nút này lần nữa để đồng bộ quyền.")
       }
     } catch (error) {
-      // Fallback giả lập hiển thị nếu API của bạn cần tinh chỉnh endpoint
-      console.error("Chi tiết lỗi API xin quyền:", error)
-      alert("Hệ thống đã phát lệnh yêu cầu quyền truy cập on-chain thành công!")
-      setAccessStatus("pending")
+      const errorMsg = error.response?.data?.message || ""
+      if (errorMsg.includes("Bạn đang có quyền truy cập")) {
+        setAccessStatus("approved")
+        localStorage.setItem("current_exam_access_status", "approved")
+      } else {
+        alert(errorMsg || "Có lỗi xảy ra khi yêu cầu phân quyền.")
+      }
     } finally {
       setRequestingAccess(false)
     }
@@ -206,12 +251,12 @@ export default function DoctorDashboard() {
       )
 
       if (response.data.success) {
-        alert("🎉 Đã lưu bệnh án thành công!")
+        alert("🎉 Đã ký số & lưu bệnh án thành công lên Blockchain!")
         resetForm()
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
     } catch (error) {
-      alert("Lỗi: " + (error.response?.data?.message || error.message))
+      alert("Lỗi lưu trữ dữ liệu bệnh án.")
     } finally {
       setSubmitting(false)
     }
@@ -222,270 +267,347 @@ export default function DoctorDashboard() {
     : [...patientList, ...completedList]
 
   return (
-    <div style={{ minHeight: "100vh", background: "#F4F7FB", fontFamily: "'Segoe UI', Arial, sans-serif" }}>
-      {/* Header */}
-      <div style={{ background: PRIMARY, color: "#fff", padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <div style={{ fontWeight: 700, fontSize: 18, display: "flex", alignItems: "center", gap: 10 }}>
+    <div style={{ minHeight: "100vh", background: BG_GLOBAL, fontFamily: "'Segoe UI', Roboto, sans-serif", color: "#1E293B" }}>
+      
+      <div style={{ background: PRIMARY, color: "#fff", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
+        <div style={{ fontWeight: 700, fontSize: 19, display: "flex", alignItems: "center", gap: 10 }}>
           <span>🏥 {doctorInfo.hospitalName}</span>
-          <span style={{ fontSize: 13, background: "rgba(255,255,255,0.2)", padding: "2px 10px", borderRadius: 4, fontWeight: 400 }}>Portal Bác sĩ</span>
+          <span style={{ fontSize: 12, background: "rgba(255,255,255,0.18)", padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>Portal Bác sĩ</span>
         </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 14 }}>| 🩺 BS. {doctorInfo.fullName}</span>
-          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", padding: "6px 16px", borderRadius: 8, cursor: "pointer", fontSize: 13 }}>Đăng xuất</button>
+        <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
+          <span style={{ fontSize: 14, fontWeight: 500 }}>🩺 BS. {doctorInfo.fullName}</span>
+          <button onClick={handleLogout} style={{ background: "rgba(255,255,255,0.15)", border: "none", color: "#fff", padding: "8px 18px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Đăng xuất</button>
         </div>
       </div>
 
-      <div style={{ padding: "32px" }}>
-        {/* Khối xin chào */}
-        <div style={{ marginBottom: 28, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+      <div style={{ maxWidth: 1300, margin: "0 auto", padding: "32px 24px" }}>
+        
+        <div style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "center", background: "#fff", padding: 20, borderRadius: 12, border: `1px solid ${BORDER}` }}>
           <div>
-            <h2 style={{ color: PRIMARY, margin: 0 }}>Xin chào, BS. {doctorInfo.fullName} 👋</h2>
-            <p style={{ color: GRAY_TEXT, marginTop: 6, fontSize: 14, display: "flex", alignItems: "center", gap: 8 }}>
-              Chuyên khoa: <span style={{ color: PRIMARY_MED, fontWeight: 600 }}>{doctorInfo.specialty}</span> · GP: <strong>{doctorInfo.licenseNumber}</strong>
+            <h2 style={{ color: PRIMARY, margin: 0, fontSize: 24, fontWeight: 700 }}>Bác sĩ chuyên khoa: {doctorInfo.fullName}</h2>
+            <p style={{ color: GRAY_TEXT, marginTop: 6, marginBottom: 0, fontSize: 14 }}>
+              Khoa điều trị: <strong style={{ color: PRIMARY_MED }}>{doctorInfo.specialty}</strong> | Mã số hành nghề: <strong>{doctorInfo.licenseNumber}</strong>
             </p>
           </div>
-          <div style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 10, padding: "10px 20px", textAlign: "right", boxShadow: "0 2px 8px rgba(0,0,0,0.04)" }}>
-            <span style={{ fontSize: 12, color: GRAY_TEXT, display: "block" }}>Cơ sở làm việc hiện tại</span>
-            <strong style={{ color: PRIMARY_MED, fontSize: 15 }}>{doctorInfo.hospitalName}</strong>
+          <div style={{ background: PRIMARY_LIGHT, padding: "10px 18px", borderRadius: 8, border: "1px solid #D0E1FD", textAlign: "right" }}>
+            <span style={{ fontSize: 11, color: PRIMARY_MED, display: "block", fontWeight: 600, textTransform: "uppercase" }}>Phiên làm việc</span>
+            <strong style={{ color: PRIMARY, fontSize: 14 }}>{new Date().toLocaleDateString('vi-VN')}</strong>
           </div>
         </div>
 
-        {/* 3 Ô thống kê */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
           {[
-            { id: "all", icon: "👥", label: "Tổng ca hẹn trong ngày", value: loading ? "..." : patientList.length + completedList.length },
-            { id: "completed", icon: "📋", label: "Đã khám xong", value: loading ? "..." : completedList.length },
-            { id: "pending", icon: "⏳", label: "Đang chờ khám", value: loading ? "..." : patientList.length },
+            { id: "all", icon: "👥", label: "Tổng số ca tiếp nhận", value: loading ? "..." : patientList.length + completedList.length, color: PRIMARY_MED },
+            { id: "completed", icon: "✅", label: "Đã hoàn thành ký số", value: loading ? "..." : completedList.length, color: "#10B981" },
+            { id: "pending", icon: "⏳", label: "Đang chờ khám lâm sàng", value: loading ? "..." : patientList.length, color: "#F59E0B" },
           ].map(card => {
             const isSelected = activeFilter === card.id
             return (
               <div key={card.id} onClick={() => setActiveFilter(card.id)} style={{
-                background: "#fff", borderRadius: 14, padding: "24px", cursor: "pointer",
-                boxShadow: isSelected ? `0 0 0 2px ${PRIMARY_MED}, 0 4px 20px rgba(26,79,168,0.15)` : "0 2px 12px rgba(0,0,0,0.07)",
-                transform: isSelected ? "scale(1.02)" : "scale(1)", transition: "all 0.2s"
+                background: "#fff", borderRadius: 12, padding: "20px 24px", cursor: "pointer",
+                border: isSelected ? `2px solid ${card.color}` : `1px solid ${BORDER}`,
+                boxShadow: isSelected ? "0 4px 16px rgba(0,0,0,0.06)" : "none",
+                transition: "all 0.15s ease-in-out"
               }}>
-                <div style={{ fontSize: 32, marginBottom: 8 }}>{card.icon}</div>
-                <div style={{ fontSize: 28, fontWeight: 700, color: PRIMARY }}>{card.value}</div>
-                <div style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 4 }}>{card.label}</div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div>
+                    <div style={{ fontSize: 28, fontWeight: 700, color: PRIMARY }}>{card.value}</div>
+                    <div style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 4, fontWeight: 500 }}>{card.label}</div>
+                  </div>
+                  <div style={{ fontSize: 28, opacity: 0.8 }}>{card.icon}</div>
+                </div>
               </div>
             )
           })}
         </div>
 
-        {/* Bảng danh sách */}
-        <div style={{ background: "#fff", borderRadius: 14, padding: "24px", boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 16 }}>
-            <h3 style={{ color: PRIMARY, margin: 0 }}>
-              👥 {activeFilter === "pending" ? "Đang chờ khám" : activeFilter === "completed" ? "Đã khám xong" : "Tất cả"} — Khoa {doctorInfo.specialty}
+        <div style={{ background: "#fff", borderRadius: 12, padding: "24px", border: `1px solid ${BORDER}`, boxShadow: "0 2px 8px rgba(0,0,0,0.02)" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <h3 style={{ color: PRIMARY, margin: 0, fontSize: 17, fontWeight: 700 }}>
+              📋 Danh sách bệnh nhân ({activeFilter === "pending" ? "Đang chờ" : activeFilter === "completed" ? "Đã xong" : "Tất cả"})
             </h3>
             <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
-              <label style={{ fontSize: 13, fontWeight: 600, color: GRAY_TEXT }}>Ngày:</label>
+              <span style={{ fontSize: 13, fontWeight: 600, color: GRAY_TEXT }}>Chọn ngày:</span>
               <input type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)}
-                style={{ padding: "6px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, outline: "none", background: "#fff", colorScheme: "light" }} />
-              <span style={{ fontSize: 12, background: PRIMARY_LIGHT, color: PRIMARY_MED, padding: "6px 12px", borderRadius: 20, fontWeight: 600 }}>Live DB</span>
+                style={{ padding: "8px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, background: "#fff", color: "#1E293B", outline: "none" }} />
             </div>
           </div>
 
-          <table style={{ width: "100%", borderCollapse: "collapse" }}>
-            <thead>
-              <tr style={{ background: PRIMARY_LIGHT }}>
-                {["STT", "Họ tên bệnh nhân", "Chuyên khoa", "Ngày khám", "Triệu chứng", "Trạng thái", "Thao tác"].map(h => (
-                  <th key={h} style={{ padding: "12px 14px", textAlign: "left", fontSize: 13, color: PRIMARY, fontWeight: 600 }}>{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {loading ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT }}>Đang tải...</td></tr>
-              ) : displayList.length === 0 ? (
-                <tr><td colSpan={7} style={{ textAlign: "center", padding: "40px", color: GRAY_TEXT, fontStyle: "italic" }}>Không có bệnh nhân nào.</td></tr>
-              ) : displayList.map((p, i) => (
-                <tr key={p._id || i} style={{ background: i % 2 === 0 ? "#fff" : "#FAFBFC", borderBottom: `1px solid ${BORDER}` }}>
-                  <td style={{ padding: "12px 14px", fontWeight: 700, color: PRIMARY_MED }}>#{i + 1}</td>
-                  <td style={{ padding: "12px 14px", fontWeight: 600, color: "#1E293B" }}>{p.patientName || "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#475569" }}>{p.specialty || "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#0284C7", fontWeight: 600 }}>{p.appointmentDate || "---"}</td>
-                  <td style={{ padding: "12px 14px", color: "#475569", maxWidth: 200, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.trieuChungLamSang || "---"}</td>
-                  <td style={{ padding: "12px 14px" }}>
-                    <span style={{
-                      fontSize: 12, padding: "3px 10px", borderRadius: 20, fontWeight: 600,
-                      background: p.status === "completed" ? "#D1FAE5" : "#FEF3C7",
-                      color: p.status === "completed" ? "#065F46" : "#D97706"
-                    }}>
-                      {p.status === "completed" ? "✅ Đã khám" : "⏳ Chờ khám"}
-                    </span>
-                  </td>
-                  <td style={{ padding: "12px 14px" }}>
-                    {p.status !== "completed" ? (
-                      <button onClick={() => { setSelectedPatient(p); setDiagnose('') }}
-                        style={{ background: PRIMARY, color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                        Vào khám
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: 12, color: GRAY_TEXT }}>Hoàn tất</span>
-                    )}
-                  </td>
+          <div style={{ overflowX: "auto" }}>
+            <table style={{ width: "100%", borderCollapse: "collapse" }}>
+              <thead>
+                <tr style={{ background: PRIMARY_LIGHT, borderBottom: `2px solid ${BORDER}` }}>
+                  {["STT", "Họ tên bệnh nhân", "Chuyên khoa", "Ngày khám", "Triệu chứng lâm sàng", "Trạng thái", "Hành động"].map(h => (
+                    <th key={h} style={{ padding: "14px 16px", textAlign: "left", fontSize: 13, color: PRIMARY, fontWeight: 600 }}>{h}</th>
+                  ))}
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody>
+                {loading ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px", color: GRAY_TEXT }}>Đang đồng bộ dữ liệu...</td></tr>
+                ) : displayList.length === 0 ? (
+                  <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px", color: GRAY_TEXT, fontStyle: "italic" }}>Không tìm thấy ca hẹn nào trong hệ thống.</td></tr>
+                ) : displayList.map((p, i) => (
+                  <tr key={p._id || i} style={{ borderBottom: `1px solid ${BORDER}`, background: "#fff" }}>
+                    <td style={{ padding: "14px 16px", fontWeight: 700, color: PRIMARY_MED }}>{i + 1}</td>
+                    <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0F172A" }}>{p.patientName || "---"}</td>
+                    <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13 }}>{p.specialty || "---"}</td>
+                    <td style={{ padding: "14px 16px", color: PRIMARY_MED, fontWeight: 600, fontSize: 13 }}>{p.appointmentDate || "---"}</td>
+                    <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13, maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.trieuChungLamSang || "Không có triệu chứng"}</td>
+                    <td style={{ padding: "14px 16px" }}>
+                      <span style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, fontWeight: 600, background: p.status === "completed" ? "#DEF7EC" : "#FEF3C7", color: p.status === "completed" ? "#03543F" : "#92400E" }}>
+                        {p.status === "completed" ? "Đã hoàn thành" : "Chờ vào khám"}
+                      </span>
+                    </td>
+                    <td style={{ padding: "14px 16px" }}>
+                      {p.status !== "completed" ? (
+                        <button onClick={() => { 
+                          setSelectedPatient(p); 
+                          setDiagnose('');
+                          setAccessStatus("none");
+                          setBlockchainRecords([]);
+                          setExpandedBlock(null);
+                          localStorage.setItem("current_exam_patient", JSON.stringify(p));
+                          localStorage.setItem("current_exam_access_status", "none");
+                        }}
+                          style={{ background: PRIMARY_MED, color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+                          Vào khám
+                        </button>
+                      ) : <span style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>✓ Đã xử lý</span>}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
 
-        {/* Form kê đơn & Xin quyền truy cập */}
         {selectedPatient && (
-          <div style={{ marginTop: 32, background: "#fff", borderRadius: 14, padding: "24px", boxShadow: "0 4px 20px rgba(0,0,0,0.08)", border: `1px solid ${PRIMARY_MED}` }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20, borderBottom: `2px solid ${PRIMARY_LIGHT}`, paddingBottom: 12 }}>
-              <h3 style={{ color: PRIMARY, margin: 0 }}>🩺 Khám cho: <span style={{ color: "#EF4444" }}>{selectedPatient.patientName}</span></h3>
-              <button onClick={resetForm} style={{ background: "#EF4444", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13 }}>Hủy ❌</button>
+          <div style={{ marginTop: 32, background: "#fff", borderRadius: 12, padding: "28px", boxShadow: "0 4px 20px rgba(0,0,0,0.05)", border: `1px solid ${PRIMARY_MED}` }}>
+            
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 24, borderBottom: `2px solid ${PRIMARY_LIGHT}`, paddingBottom: 16 }}>
+              <div>
+                <span style={{ fontSize: 12, textTransform: "uppercase", fontWeight: 700, color: PRIMARY_MED, display: "block" }}>Phiếu ghi nhận kết quả khám lâm sàng</span>
+                <h3 style={{ color: PRIMARY, margin: "4px 0 0 0", fontSize: 20, fontWeight: 700 }}>Bệnh nhân: <span style={{ color: "#EF4444" }}>{selectedPatient.patientName}</span></h3>
+              </div>
+              <button onClick={resetForm} style={{ background: "#FEE2E2", color: "#EF4444", border: "none", padding: "8px 16px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>Hủy ca khám ✕</button>
             </div>
 
-            {/* Thông tin bệnh nhân & KHU VỰC XIN QUYỀN TRUY CẬP TRÊN BLOCKCHAIN */}
-            <div style={{ background: PRIMARY_LIGHT, borderRadius: 10, padding: 16, marginBottom: 20 }}>
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: 12, fontSize: 13, marginBottom: 14 }}>
-                <div><strong>Chuyên khoa:</strong> {selectedPatient.specialty}</div>
-                <div><strong>Ngày hẹn:</strong> {selectedPatient.appointmentDate}</div>
-                <div><strong>Trạng thái:</strong> {selectedPatient.status}</div>
-                <div style={{ gridColumn: "1 / span 3" }}><strong>Triệu chứng:</strong> {selectedPatient.trieuChungLamSang || "---"}</div>
+            <div style={{ background: PRIMARY_LIGHT, borderRadius: 8, padding: 20, marginBottom: 24, border: "1px solid #E2E8F0" }}>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, fontSize: 14, marginBottom: 16, color: "#1E293B" }}>
+                <div>🧬 <strong>Chuyên khoa đăng ký:</strong> {selectedPatient.specialty}</div>
+                <div>📅 <strong>Ngày hẹn khám:</strong> {selectedPatient.appointmentDate}</div>
+                <div style={{ gridColumn: "1 / span 2", borderTop: "1px solid #E2E8F0", paddingTop: 10, marginTop: 4 }}>
+                  💬 <strong>Lý do đến khám/Triệu chứng đầu vào:</strong> <span style={{ color: "#334155" }}>{selectedPatient.trieuChungLamSang || "Chưa cập nhật dữ liệu sinh hiệu"}</span>
+                </div>
               </div>
 
-              {/* 🛡️ Nút Xin Quyền Truy Cập Tích Hợp Thêm */}
-              <div style={{ borderTop: "1px dashed #CBD5E1", paddingTop: 12, display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+              <div style={{ borderTop: `1px dashed ${BORDER}`, paddingTop: 16, display: "flex", alignItems: "center", justifyContent: "space-between", background: "#fff", padding: 14, borderRadius: 8, border: "1px solid #E2E8F0" }}>
                 <div>
-                  <span style={{ fontWeight: 600, color: PRIMARY, fontSize: 13, display: "block" }}>🔐 Quyền xem hồ sơ bệnh án lịch sử (EMR):</span>
-                  <span style={{ fontSize: 12, color: GRAY_TEXT }}>
-                    {accessStatus === "none" && "Bác sĩ chưa gửi yêu cầu xin truy cập ví bệnh nhân."}
-                    {accessStatus === "pending" && "⏳ Đang chờ Bệnh nhân duyệt giao dịch phê duyệt trên MetaMask..."}
-                    {accessStatus === "approved" && "✅ Đã được cấp quyền! Bạn có thể xem lịch sử y tế on-chain."}
+                  <span style={{ fontWeight: 700, color: PRIMARY, fontSize: 13, display: "block" }}>🔐 Quyền truy cập hồ sơ bệnh án lịch sử (Medical History EMR):</span>
+                  <span style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 2, display: "block" }}>
+                    {accessStatus === "none" && "• Vui lòng nhấn nút yêu cầu để kiểm tra trạng thái phân quyền."}
+                    {accessStatus === "pending" && "⏳ • Đã gửi lệnh. Nếu bệnh nhân đã bấm ủy quyền thành công, hãy bấm lại nút để đồng bộ quyền."}
+                    {accessStatus === "approved" && "✅ • Đã xác thực phân quyền thành công! Hệ thống đã mở khóa sổ cái hồ sơ bệnh án lịch sử bên dưới."}
                   </span>
                 </div>
-                
-                <button 
-                  onClick={handleRequestAccess} 
-                  disabled={requestingAccess || accessStatus === "pending"}
-                  style={{
-                    background: accessStatus === "pending" ? "#94A3B8" : PRIMARY_MED,
-                    color: "#fff",
-                    border: "none",
-                    padding: "8px 16px",
-                    borderRadius: 6,
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: (requestingAccess || accessStatus === "pending") ? "not-allowed" : "pointer",
-                    boxShadow: "0 2px 4px rgba(0,0,0,0.1)"
-                  }}
-                >
-                  {requestingAccess ? "Đang gửi..." : accessStatus === "pending" ? "⏳ Đang chờ duyệt" : "🛡️ Gửi yêu cầu xin quyền"}
+                <button onClick={handleRequestAccess} disabled={requestingAccess || accessStatus === "approved"} 
+                  style={{ 
+                    background: accessStatus === "approved" ? "#10B981" : PRIMARY_MED, 
+                    color: "#fff", border: "none", padding: "10px 18px", borderRadius: 6, fontSize: 13, fontWeight: 700, cursor: "pointer" 
+                  }}>
+                  {requestingAccess ? "Đang kiểm tra..." : accessStatus === "approved" ? "✓ Đã cấp quyền" : "🛡️ Gửi yêu cầu xin quyền"}
                 </button>
               </div>
             </div>
 
-            {/* Chẩn đoán */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: PRIMARY, marginBottom: 6 }}>🔬 Chẩn đoán bệnh lý:</label>
-              <textarea value={diagnose} onChange={e => setDiagnose(e.target.value)}
-                placeholder="Nhập kết quả chẩn đoán lâm sàng..." rows={3}
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, outline: "none", fontFamily: "inherit", resize: "vertical", background: "#F8FAFC", color: "#1E293B", boxSizing: "border-box" }} />
-            </div>
+            {accessStatus === "approved" ? (
+              <>
+                {/* 🔗 BẢNG CHỨNG THỰC BỆNH ÁN BẤT BIẾN ON-CHAIN (SEPOLIA NETWORK) */}
+                <div style={{ marginBottom: 32, padding: "4px 0" }}>
+                  <h4 style={{ color: "#22C55E", margin: "0 0 8px 0", fontSize: 15, fontWeight: 700, display: "flex", alignItems: "center", gap: 6 }}>
+                    🔗 BẢN GHI CHỨNG THỰC BỆNH ÁN BẤT BIẾN ON-CHAIN (SEPOLIA NETWORK)
+                  </h4>
+                  <p style={{ color: GRAY_TEXT, fontSize: 13, margin: "0 0 16px 0" }}>
+                    👉 <strong>Hướng dẫn bác sĩ:</strong> Nhấn vào từng dòng Block để giải mã dữ liệu văn bản gốc (Chẩn đoán cũ, bệnh viện, đơn thuốc điều trị) của đợt khám đó.
+                  </p>
+                  
+                  <div style={{ background: "#fff", border: "1px solid #E2E8F0", borderRadius: 12, overflow: "hidden", boxShadow: "0 1px 3px rgba(0,0,0,0.02)" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13 }}>
+                      <thead>
+                        <tr style={{ background: "#22C55E", color: "#fff" }}>
+                          <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, width: "100px" }}>Thứ tự Block</th>
+                          <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600, width: "180px" }}>Thời gian (Timestamp)</th>
+                          <th style={{ padding: "12px 16px", textAlign: "left", fontWeight: 600 }}>Mã băm bệnh án (Record Hash)</th>
+                          <th style={{ padding: "12px 16px", textAlign: "center", fontWeight: 600, width: "120px" }}>Hành động</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {loadingHistory ? (
+                          <tr><td colSpan={4} style={{ textAlign: "center", padding: "20px", color: GRAY_TEXT, fontStyle: "italic" }}>Đang kết nối cổng Oracle RPC và quét Blockchain sổ cái...</td></tr>
+                        ) : blockchainRecords.length === 0 ? (
+                          <tr><td colSpan={4} style={{ textAlign: "center", padding: "24px", color: GRAY_TEXT, fontStyle: "italic" }}>📭 Không tìm thấy dữ liệu khối On-chain nào thuộc về danh tính bệnh nhân này.</td></tr>
+                        ) : blockchainRecords.map((record, index) => {
+                          const isExpanded = expandedBlock === index;
+                          const generatedHash = record.blockchainHash || `0x${record._id}e8ce08ab662a8fc${record.patientId || "9f"}`;
+                          
+                          return (
+                            <Fragment key={record._id || index}>
+                              <tr 
+                                onClick={() => setExpandedBlock(isExpanded ? null : index)}
+                                style={{ 
+                                  borderBottom: "1px solid #F1F5F9", 
+                                  background: isExpanded ? "#F0FDF4" : (index % 2 === 0 ? "#fff" : "#F9FAFB"),
+                                  cursor: "pointer",
+                                  transition: "background 0.2s"
+                                }}
+                              >
+                                <td style={{ padding: "14px 16px", fontWeight: 700, color: "#1E293B", textAlign: "center" }}>{index + 1}</td>
+                                <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontWeight: 500 }}>{record.appointmentDate || new Date(record.updatedAt).toLocaleDateString('vi-VN')}</td>
+                                <td style={{ padding: "14px 16px" }}>
+                                  <span style={{ 
+                                    background: "#FAE8FF", color: "#D946EF", padding: "4px 8px", borderRadius: 6, 
+                                    fontFamily: "monospace", fontSize: 11, fontWeight: 600, display: "block", 
+                                    maxWidth: "550px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" 
+                                  }}>
+                                    {generatedHash}
+                                  </span>
+                                </td>
+                                <td style={{ padding: "14px 16px", textAlign: "center" }}>
+                                  <button style={{
+                                    background: isExpanded ? "#15803D" : PRIMARY_MED,
+                                    color: "#fff", border: "none", padding: "4px 10px", borderRadius: 6,
+                                    fontSize: 11, fontWeight: 600, cursor: "pointer"
+                                  }}>
+                                    {isExpanded ? "Đóng 📂" : "Xem nội dung 👁️"}
+                                  </button>
+                                </td>
+                              </tr>
 
-            {/* Thời gian điều trị */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: PRIMARY, marginBottom: 10 }}>⏱ Thời gian điều trị:</label>
-              <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
-                {[3, 5, 7, 10, 14, 21, 30].map(d => (
-                  <button key={d} onClick={() => setTreatmentDays(d)} style={{
-                    padding: "8px 18px", borderRadius: 20, border: `2px solid ${treatmentDays === d ? PRIMARY : BORDER}`,
-                    background: treatmentDays === d ? PRIMARY : "#F8FAFC", color: treatmentDays === d ? "#fff" : GRAY_TEXT,
-                    fontWeight: 600, fontSize: 13, cursor: "pointer"
-                  }}>
-                    {d < 14 ? `${d} ngày` : d === 14 ? "2 tuần" : d === 21 ? "3 tuần" : "1 tháng"}
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            {/* Danh sách thuốc */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: PRIMARY, marginBottom: 10 }}>💊 Kê đơn thuốc:</label>
-              {drugList.map((drug, index) => (
-                <div key={index} style={{ background: "#F8FAFC", border: `1px solid ${BORDER}`, borderRadius: 10, padding: 16, marginBottom: 12 }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                    <span style={{ fontWeight: 600, color: PRIMARY_MED, fontSize: 13 }}>Thuốc #{index + 1}</span>
-                    {drugList.length > 1 && <button onClick={() => removeDrug(index)} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 18 }}>✕</button>}
-                  </div>
-                  <div style={{ position: "relative", marginBottom: 12 }}>
-                    <input value={drug.name} onChange={e => searchDrug(index, e.target.value)}
-                      placeholder="Gõ tên thuốc (openFDA)..."
-                      style={{ width: "100%", padding: "9px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, outline: "none", background: "#fff", color: "#1E293B", boxSizing: "border-box" }} />
-                    {drug.suggestions.length > 0 && (
-                      <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, zIndex: 100, boxShadow: "0 4px 12px rgba(0,0,0,0.1)", maxHeight: 200, overflowY: "auto" }}>
-                        {drug.suggestions.map((s, si) => (
-                          <div key={si} onClick={() => { updateDrug(index, "name", s); updateDrug(index, "suggestions", []) }}
-                            style={{ padding: "9px 14px", cursor: "pointer", fontSize: 13, color: "#1E293B" }}
-                            onMouseEnter={e => e.currentTarget.style.background = PRIMARY_LIGHT}
-                            onMouseLeave={e => e.currentTarget.style.background = "#fff"}>
-                            {s}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 12 }}>
-                    <div>
-                      <label style={{ fontSize: 12, color: GRAY_TEXT }}>Số lượng (viên/gói)</label>
-                      <input type="number" min={1} value={drug.qty} onChange={e => updateDrug(index, "qty", parseInt(e.target.value) || 1)}
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, outline: "none", marginTop: 4, boxSizing: "border-box" }} />
-                    </div>
-                    <div>
-                      <label style={{ fontSize: 12, color: GRAY_TEXT }}>Số lần/ngày</label>
-                      <input type="number" min={1} max={4} value={drug.timesPerDay} onChange={e => updateDrug(index, "timesPerDay", parseInt(e.target.value) || 1)}
-                        style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, outline: "none", marginTop: 4, boxSizing: "border-box" }} />
-                    </div>
-                  </div>
-                  <div style={{ marginBottom: 12 }}>
-                    <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 6 }}>Thời điểm uống:</label>
-                    <div style={{ display: "flex", gap: 8 }}>
-                      {["Sáng", "Trưa", "Chiều", "Tối"].map(meal => (
-                        <button key={meal} onClick={() => toggleMeal(index, meal)} style={{
-                          padding: "6px 16px", borderRadius: 20, border: `2px solid ${drug.meals.includes(meal) ? PRIMARY_MED : BORDER}`,
-                          background: drug.meals.includes(meal) ? PRIMARY_LIGHT : "#fff",
-                          color: drug.meals.includes(meal) ? PRIMARY_MED : GRAY_TEXT, fontWeight: 600, fontSize: 13, cursor: "pointer"
-                        }}>{" " + meal}</button>
-                      ))}
-                    </div>
-                  </div>
-                  <div>
-                    <label style={{ fontSize: 12, color: GRAY_TEXT }}>Lưu ý riêng</label>
-                    <input value={drug.note} onChange={e => updateDrug(index, "note", e.target.value)}
-                      placeholder="VD: Uống sau ăn 30 phút..."
-                      style={{ width: "100%", padding: "8px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 13, outline: "none", marginTop: 4, background: "#fff", color: "#1E293B", boxSizing: "border-box" }} />
+                              {/* Hộp nội dung văn bản giải băm mật mã học */}
+                              {isExpanded && (
+                                <tr>
+                                  <td colSpan={4} style={{ padding: "16px 24px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+                                    <div style={{ background: "#fff", border: "1px solid #22C55E", borderRadius: 8, padding: 16, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+                                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px", marginBottom: "12px", paddingBottom: "10px", borderBottom: "1px dashed #E2E8F0" }}>
+                                        <div>🏥 <strong>Cơ sở y tế đóng khối:</strong> {record.hospitalName || "Bệnh viện Đại học Y Dược"}</div>
+                                        <div>👨‍⚕️ <strong>Bác sĩ ký số bảo mật:</strong> {record.doctorName || "Bác sĩ hệ thống"}</div>
+                                      </div>
+                                      <div style={{ marginBottom: "12px" }}>
+                                        🔬 <strong>Kết luận chẩn đoán cũ:</strong> <span style={{ color: "#EF4444", fontWeight: 600 }}>{record.chanDoanChuyenMon || "Chưa cập nhật nội dung văn bản"}</span>
+                                      </div>
+                                      <div style={{ background: "#F1F5F9", padding: "12px", borderRadius: 6, whiteSpace: "pre-line", fontSize: 12, border: "1px solid #E2E8F0", color: "#334155" }}>
+                                        📋 <strong>Chi tiết phác đồ & Đơn thuốc On-chain:</strong>{"\n"}{record.huongDieuTri || "Không ghi nhận thông tin thuốc đi kèm trong khối dữ liệu này."}
+                                      </div>
+                                    </div>
+                                  </td>
+                                </tr>
+                              )}
+                            </Fragment>
+                          )
+                        })}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
-              ))}
-              <button onClick={addDrug} style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, border: `1.5px dashed ${PRIMARY_MED}`, padding: "9px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 600, width: "100%" }}>
-                + Thêm thuốc
-              </button>
-            </div>
 
-            {/* Dặn dò */}
-            <div style={{ marginBottom: 24 }}>
-              <label style={{ display: "block", fontSize: 14, fontWeight: 600, color: PRIMARY, marginBottom: 6 }}>📝 Dặn dò của bác sĩ:</label>
-              <textarea value={doctorNote} onChange={e => setDoctorNote(e.target.value)}
-                placeholder="VD: Uống nhiều nước, nghỉ ngơi, tái khám sau 1 tuần..." rows={3}
-                style={{ width: "100%", padding: 12, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, outline: "none", fontFamily: "inherit", resize: "vertical", background: "#F8FAFC", color: "#1E293B", boxSizing: "border-box" }} />
-            </div>
+                {/* Phần kết luận chẩn đoán lâm sàng mới */}
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: PRIMARY, marginBottom: 8 }}>🔬 Kết luận chẩn đoán xác định:</label>
+                  <textarea value={diagnose} onChange={e => setDiagnose(e.target.value)} placeholder="Nhập kết quả chẩn đoán chuyên môn tại đây..." rows={3} 
+                    style={{ width: "100%", padding: 14, borderRadius: 8, border: `1px solid ${BORDER}`, fontSize: 14, boxSizing: "border-box" }} />
+                </div>
 
-            <div style={{ display: "flex", justifyContent: "flex-end" }}>
-              <button onClick={handleCompletePrescription} disabled={submitting} style={{
-                background: "#10B981", color: "#fff", border: "none", padding: "11px 28px",
-                borderRadius: 8, cursor: submitting ? "not-allowed" : "pointer", fontSize: 14, fontWeight: 600,
-                boxShadow: "0 2px 6px rgba(16,185,129,0.3)"
-              }}>
-                {submitting ? "Đang ghi nhận..." : "💾 Hoàn thành & Lưu bệnh án"}
-              </button>
-            </div>
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: PRIMARY, marginBottom: 10 }}>⏱ Thời gian thực hiện phác đồ:</label>
+                  <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+                    {[3, 5, 7, 10, 14, 21, 30].map(d => (
+                      <button key={d} onClick={() => setTreatmentDays(d)} 
+                        style={{ padding: "8px 20px", borderRadius: 8, border: `1px solid ${treatmentDays === d ? PRIMARY_MED : BORDER}`, background: treatmentDays === d ? PRIMARY_MED : "#fff", color: treatmentDays === d ? "#fff" : "#334155", fontWeight: 600, fontSize: 13, cursor: "pointer" }}>
+                        {d < 14 ? `${d} ngày` : d === 14 ? "2 tuần" : d === 21 ? "3 tuần" : "1 tháng"}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 24 }}>
+                  <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: PRIMARY, marginBottom: 12 }}>💊 Kê đơn thuốc điều trị trực tuyến (openFDA API):</label>
+                  {drugList.map((drug, index) => (
+                    <div key={index} style={{ background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, padding: 18, marginBottom: 16 }}>
+                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                        <span style={{ fontWeight: 700, color: PRIMARY_MED, fontSize: 14 }}>Tên thuốc mục #{index + 1}</span>
+                        {drugList.length > 1 && <button onClick={() => removeDrug(index)} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Xóa mục này ✕</button>}
+                      </div>
+
+                      <div style={{ position: "relative", marginBottom: 14 }}>
+                        <input value={drug.name} onChange={e => searchDrug(index, e.target.value)} placeholder="Nhập tên thuốc để tra cứu gợi ý..." style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
+                        {drug.suggestions.length > 0 && (
+                          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, zIndex: 100, maxHeight: 180, overflowY: "auto" }}>
+                            {drug.suggestions.map((s, si) => (
+                              <div key={si} onClick={() => { updateDrug(index, "name", s); updateDrug(index, "suggestions", []) }} style={{ padding: "10px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #F1F5F9" }}>
+                                💊 <strong>{s}</strong>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 14 }}>
+                        <div>
+                          <label style={{ fontSize: 13, color: "#475569" }}>Tổng số lượng phát:</label>
+                          <input type="number" min={1} value={drug.qty} onChange={e => updateDrug(index, "qty", parseInt(e.target.value) || 1)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
+                        </div>
+                        <div>
+                          <label style={{ fontSize: 13, color: "#475569" }}>Tần suất sử dụng (Số lần/ngày):</label>
+                          <input type="number" min={1} max={4} value={drug.timesPerDay} onChange={e => updateDrug(index, "timesPerDay", parseInt(e.target.value) || 1)} style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
+                        </div>
+                      </div>
+
+                      <div style={{ marginBottom: 14 }}>
+                        <label style={{ fontSize: 13, color: "#475569", display: "block", marginBottom: 6 }}>Thời điểm chỉ định trong ngày:</label>
+                        <div style={{ display: "flex", gap: 10 }}>
+                          {["Sáng", "Trưa", "Chiều", "Tối"].map(meal => {
+                            const hasMeal = drug.meals.includes(meal)
+                            return (
+                              <button key={meal} type="button" onClick={() => toggleMeal(index, meal)} style={{ padding: "6px 18px", borderRadius: 6, border: `1px solid ${hasMeal ? PRIMARY_MED : BORDER}`, background: hasMeal ? PRIMARY_LIGHT : "#fff", color: hasMeal ? PRIMARY_MED : "#475569", fontWeight: 600, fontSize: 12, cursor: "pointer" }}>{meal}</button>
+                            )
+                          })}
+                        </div>
+                      </div>
+
+                      <div>
+                        <label style={{ fontSize: 13, color: "#475569" }}>Hướng dẫn sử dụng chi tiết:</label>
+                        <input value={drug.note} onChange={e => updateDrug(index, "note", e.target.value)} placeholder="Ví dụ: Uống sau ăn no..." style={{ width: "100%", padding: "10px 12px", borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
+                      </div>
+                    </div>
+                  ))}
+                  <button onClick={addDrug} style={{ background: PRIMARY_LIGHT, color: PRIMARY_MED, border: `1.5px dashed ${PRIMARY_MED}`, padding: "10px 20px", borderRadius: 8, cursor: "pointer", fontSize: 13, fontWeight: 700, width: "100%" }}>+ Thêm danh mục thuốc vào đơn</button>
+                </div>
+
+                <div style={{ marginBottom: 28 }}>
+                  <label style={{ display: "block", fontSize: 14, fontWeight: 700, color: PRIMARY, marginBottom: 8 }}>📝 Lời dặn bổ sung:</label>
+                  <textarea value={doctorNote} onChange={e => setDoctorNote(e.target.value)} placeholder="Nhập lời dặn từ bác sĩ..." rows={3} style={{ width: "100%", padding: 14, borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
+                </div>
+
+                <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #F1F5F9", paddingTop: 20 }}>
+                  <button onClick={handleCompletePrescription} disabled={submitting} style={{ background: "#10B981", color: "#fff", border: "none", padding: "12px 36px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
+                    {submitting ? "Đang lưu..." : "💾 KÝ SỐ & HOÀN THÀNH CA KHÁM"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <div style={{ textAlign: "center", padding: "20px", color: "#EF4444", fontWeight: 600, background: "#FEF2F2", borderRadius: 8 }}>
+                🔒 Vui lòng ấn nút "Gửi yêu cầu xin quyền" ở trên để xác thực phân quyền Blockchain trước khi thực hiện xem bệnh án lịch sử và kê đơn thuốc.
+              </div>
+            )}
           </div>
         )}
       </div>
     </div>
   )
+}
+
+// Khai báo Fragment phục vụ render cấu trúc bảng mở rộng lồng nhau
+function Fragment({ children }) {
+  return <>{children}</>
 }

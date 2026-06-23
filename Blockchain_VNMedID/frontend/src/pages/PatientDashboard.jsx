@@ -626,9 +626,28 @@ export default function PatientDashboard() {
                 <form onSubmit={handleBookAppointment}>
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Cơ sở y tế mong muốn tiếp tiếp nhận <span style={{ color: 'red' }}>*</span></label>
-                    <select style={inputStyle} value={formAppointment.hospitalName} onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}>
-                      <option value="">-- Click chọn cơ sở bệnh viện tương thích --</option>
-                      {HOSPITALS.map(h => <option key={h} value={h}>{h}</option>)}
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.hospitalName} 
+                      onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}
+                      disabled={loadingHospitals} // Vô hiệu hóa khi chưa tải xong dữ liệu
+                    >
+                      <option value="">
+                        {loadingHospitals ? "-- Đang đồng bộ danh sách cơ sở... --" : "-- Click chọn cơ sở bệnh viện tương thích --"}
+                      </option>
+                      
+                      {!loadingHospitals && hospitals.map(h => {
+                        // 💡 Lưu ý: Hãy kiểm tra field tên bệnh viện trong DB của bạn là 'name', 'fullName' hay 'hospitalName' để chọn đúng nhé.
+                        // Ví dụ ở đây tôi dùng: h.name || h.hospitalName || h["Tên Bệnh viện"]
+                        const hospitalNameText = h.name || h.hospitalName || h["Tên Bệnh viện"] || h;
+                        const hospitalValue = h.name || h.hospitalName || h._id || h; // Nếu bạn lưu string vào phiếu hẹn thì để tên, lưu ID thì để h._id
+
+                        return (
+                          <option key={h._id || hospitalNameText} value={hospitalValue}>
+                            {hospitalNameText}
+                          </option>
+                        );
+                      })}
                     </select>
                   </div>
 
@@ -640,6 +659,8 @@ export default function PatientDashboard() {
                       <option value="Nhi khoa">Nhi khoa tổng hợp</option>
                       <option value="Tim mạch">Chuyên khoa Tim mạch</option>
                       <option value="Da liễu">Chuyên khoa Da liễu</option>
+                      <option value="Tai mũi họng">Chuyên khoa Tai mũi họng</option>
+                      <option value="Răng hàm mặt">Chuyên khoa Răng hàm mặt</option>
                     </select>
                   </div>
 

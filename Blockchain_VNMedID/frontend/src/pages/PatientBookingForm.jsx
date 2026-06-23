@@ -7,11 +7,26 @@ const SPECIALTIES = [
   "Mắt", "Răng hàm mặt", "Thần kinh", "Xương khớp",
 ];
 
-// ✅ DANH SÁCH BỆNH VIỆN CHO BỆNH NHÂN LỰA CHỌN TRÙNG KHỚP KỊCH BẢN BACKEND
-const HOSPITALS = [
-  "Bệnh viện Chợ Rẫy",
-  "Bệnh viện Đại học Y Dược"
-];
+export default function PatientBookingForm() {
+  const [hospitals, setHospitals] = useState([]);
+  const [loadingHospitals, setLoadingHospitals] = useState(true);
+  useEffect(() => {
+    const fetchHospitals = async () => {
+      try {
+        const response = await axios.get("https://blockchainvnmedid-production.up.railway.app/api/v1/hospitals");
+        if (response.data?.success) {
+          setHospitals(response.data.hospitals);
+        }
+      } catch (error) {
+        console.error("Lỗi khi tải danh sách bệnh viện:", error);
+      } finally {
+        setLoadingHospitals(false);
+      }
+    };
+
+    fetchHospitals();
+  }, []);
+}
 
 export default function PatientBookingForm({ onBookingSuccess }) {
   const [specialty, setSpecialty]   = useState('');
