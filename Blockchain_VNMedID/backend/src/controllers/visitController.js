@@ -79,7 +79,7 @@ exports.bookAppointment = async (req, res) => {
       doctorId: activeShift.doctorId,       // 👈 Máy tự gán ID bác sĩ tìm được
       doctorName: activeShift.doctorName,   // 👈 Máy tự gán Tên bác sĩ
       shiftId: activeShift._id,             // 👈 Gắn chốt luôn vào ca trực đó
-      status: "examining"                   // 👈 Đổi trạng thái bỏ qua bước pending của admin
+      status: "pending"                   // 👈 Đổi trạng thái bỏ qua bước pending của admin
     });
     
     await visit.save();
