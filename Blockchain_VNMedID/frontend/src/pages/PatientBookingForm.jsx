@@ -13,7 +13,7 @@ export default function PatientBookingForm() {
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        const response = await axios.get("https://blockchain-vnmedid.onrender.com/api/v1/hospitals");
+        const response = await axios.get("https://blockchain-vnmedid.onrender.com/api/v1/doctors/hospitals");
         if (response.data?.success) {
           setHospitals(response.data.hospitals);
         }
