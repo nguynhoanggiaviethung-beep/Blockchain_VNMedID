@@ -138,12 +138,14 @@ export default function AdminSchedule() {
             ...createForm,
             doctorId: doc._id // Thay thế bằng ID cụ thể của bác sĩ trong vòng lặp
           };
-          await axios.post(`${BASE_URL}/schedules`, payload, {
+          await axios.post(`${BASE_URL}/shifts`, payload, {
+
             headers: { Authorization: `Bearer ${token}` }
           });
           successCount++;
         } catch (err) {
-          console.error(`Lỗi tạo lịch cho bác sĩ ${doc["Họ và tên"]}:`, err);
+          console.error(`Lỗi tạo lịch cho bác sĩ ${doc.fullName}:`, err);
+
           failCount++;
         }
       }
@@ -253,7 +255,8 @@ export default function AdminSchedule() {
           {!isEdit && <option value="ALL_DOCTORS" style={{ fontWeight: "bold", color: PRIMARY_MED }}>🌟 TẤT CẢ BÁC SĨ</option>}
           {doctors.map(d => (
             <option key={d._id} value={d._id}>
-              {d["Họ và tên"]} {d["Chuyên Khoa"] ? `– ${d["Chuyên Khoa"]}` : ""}
+             {d.fullName} {d.specialty ? `– ${d.specialty}` : ""}
+             
             </option>
           ))}
         </select>

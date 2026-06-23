@@ -1,4 +1,3 @@
-
 const jwt = require('jsonwebtoken');
 
 // 1. Middleware kiểm tra Login (Verify Token)
@@ -14,8 +13,14 @@ const xacThucToken = (req, res, next) => {
         const secretKey = process.env.JWT_SECRET || 'vnmedid_super_secret_key_2024';
         const decoded = jwt.verify(token, secretKey);
         
-        req.user = decoded; // Lưu thông tin { userId, role } vào request
+        // ✅ Gán rõ ràng từng trường để Controller gọi không bao giờ bị undefined
+        req.user = {
+            userId: decoded.userId,
+            role: decoded.role,
+            hospitalName: decoded.hospitalName // Truyền thẻ tên Bệnh viện
+        };
         req.userId = decoded.userId;
+        
         next();
     } catch (error) {
         return res.status(401).json({ success: false, message: 'Token hết hạn hoặc không hợp lệ!' });
@@ -37,3 +42,4 @@ const phanQuyen = (...roles) => {
 };
 
 module.exports = { xacThucToken, phanQuyen };
+

@@ -1,4 +1,3 @@
-// API Format/src/routes/doctorRoutes.js
 const express = require('express');
 const router = express.Router();
 
@@ -13,7 +12,6 @@ router.post('/', xacThucToken, phanQuyen('admin'), doctorController.createDoctor
 // Xem thông tin bác sĩ: BẮT BUỘC đăng nhập VÀ role phải là 'admin' HOẶC 'doctor'
 router.get('/:id', xacThucToken, phanQuyen('admin', 'doctor'), doctorController.getDoctorById);
 
-module.exports = router;
 // Lấy danh sách bác sĩ — Admin + Doctor
 router.get('/', xacThucToken, phanQuyen('admin', 'doctor'), doctorController.getAllDoctors);
 
@@ -22,3 +20,6 @@ router.put('/:id', xacThucToken, phanQuyen('admin'), doctorController.updateDoct
 
 // Xóa bác sĩ — chỉ Admin
 router.delete('/:id', xacThucToken, phanQuyen('admin'), doctorController.deleteDoctor);
+
+// CHÚ Ý: Luôn để dòng này ở CUỐI CÙNG của file
+module.exports = router;

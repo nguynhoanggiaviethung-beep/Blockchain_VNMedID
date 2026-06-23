@@ -20,6 +20,7 @@ const register = async (req, res) => {
     await db.collection("users").insertOne({
       _id: commonId, fullName, email,
       password: hashedPassword, role: role || "doctor",
+      hospitalName: hospitalName || null,
       createdAt: new Date(), updatedAt: new Date(),
     });
 
@@ -60,7 +61,20 @@ const login = async (req, res) => {
     if (!isMatch) return res.status(401).json({ success: false, message: "Mật khẩu không chính xác!" });
 
     const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";
-    const token = jwt.sign({ userId: user._id, role }, secretKey, { expiresIn: "7d" });
+    
+    // ✅ LỒNG GHÉP: Xử lý hospitalName để phân quyền Admin bệnh viện
+    let hospitalName = user.hospitalName || null;
+    if (role === 'doctor') {
+        const doctorProfile = await db.collection("doctors").findOne({ _id: user._id });
+        hospitalName = doctorProfile ? doctorProfile.hospitalName : null;
+    }
+
+    // ✅ SỬA: Đưa hospitalName vào Token để Backend dùng lọc dữ liệu
+    const token = jwt.sign({ 
+        userId: user._id, 
+        role, 
+        hospitalName 
+    }, secretKey, { expiresIn: "7d" });
 
     return res.status(200).json({
       success: true,
@@ -69,7 +83,7 @@ const login = async (req, res) => {
         token, role,
         fullName: user.fullName || "Người dùng VNmedID",
         userId: user._id,
-        // ✅ Trả về walletAddress để frontend biết đã kết nối ví chưa
+        hospitalName, // ✅ Trả về Frontend để hiển thị
         walletAddress: user.walletAddress || null,
       },
     });

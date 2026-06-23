@@ -28,7 +28,12 @@ exports.createShift = async (req, res) => {
 exports.getAllShifts = async (req, res) => {
   try {
     const { doctorId, date, shift: shiftType, specialty } = req.query;
+    const adminHospital = req.user?.hospitalName || null;
     let filter = {};
+    
+    // ✅ BỘ LỌC CÔ LẬP: Admin chỉ thấy lịch trực của bệnh viện mình
+    if (adminHospital) filter.hospitalName = adminHospital;
+    
     if (doctorId)  filter.doctorId = doctorId;
     if (date)      filter.date = date;
     if (shiftType) filter.shift = shiftType;
@@ -69,19 +74,10 @@ exports.deleteShift = async (req, res) => {
   }
 };
 
-// ─── AUTO SCHEDULE ───────────────────────────────────────────────────────────
+// ─── AUTO SCHEDULE (ROUND-ROBIN) ─────────────────────────────────────────────
 /**
- * @desc  Admin bấm 1 nút → hệ thống tự xếp lịch cho toàn bộ bác sĩ theo chuyên khoa
+ * @desc  Admin bấm 1 nút → hệ thống tự xếp lịch xoay vòng cho bác sĩ thuộc Bệnh viện đó
  * @route POST /api/v1/shifts/auto-schedule
- * @body  { specialty, startDate, weeks }
- *
- * Thuật toán:
- *  1. Lấy danh sách bác sĩ theo chuyên khoa
- *  2. Tính tổng số buổi cần xếp trong khoảng thời gian (weeks tuần × 6 ngày × 2 ca)
- *  3. Shuffle bác sĩ ngẫu nhiên 1 lần để tạo thứ tự vòng tròn (round-robin)
- *  4. Với mỗi ngày làm việc (Thứ 2 → Thứ 7): xếp lần lượt ca sáng → ca chiều
- *     mỗi ca gán 1 bác sĩ theo vòng tròn → đảm bảo không trùng, phân đều
- *  5. Lịch tuần lặp lại giống nhau (vì dùng index % bác sĩ)
  */
 exports.autoSchedule = async (req, res) => {
   try {
@@ -95,24 +91,29 @@ exports.autoSchedule = async (req, res) => {
     }
 
     const db = mongoose.connection.db;
+    const adminHospital = req.user?.hospitalName || null;
 
-    // 1. Lấy danh sách bác sĩ theo chuyên khoa
-    // Doctor model dùng field "Chuyên Khoa" theo schema của bạn
-    const doctors = await db.collection('doctors').find({
+    // 1. Chỉ lấy bác sĩ thuộc Bệnh viện của Admin đang đăng nhập
+    const query = {
       $or: [
         { specialty: specialty },
         { 'Chuyên Khoa': specialty }
       ]
-    }).toArray();
+    };
+    if (adminHospital) {
+        query.hospitalName = adminHospital;
+    }
+    
+    const doctors = await db.collection('doctors').find(query).toArray();
 
     if (doctors.length === 0) {
       return res.status(404).json({
         success: false,
-        message: `Không tìm thấy bác sĩ nào thuộc chuyên khoa "${specialty}"`
+        message: `Không tìm thấy bác sĩ nào thuộc chuyên khoa "${specialty}" tại ${adminHospital || 'hệ thống'}`
       });
     }
 
-    // 2. Shuffle bác sĩ ngẫu nhiên 1 lần (Fisher-Yates)
+    // 2. Shuffle ngẫu nhiên danh sách 1 lần để làm mốc khởi đầu vòng xoay
     const shuffled = [...doctors];
     for (let i = shuffled.length - 1; i > 0; i--) {
       const j = Math.floor(Math.random() * (i + 1));
@@ -123,7 +124,6 @@ exports.autoSchedule = async (req, res) => {
     const workingDays = [];
     const start = new Date(startDate);
 
-    // Đảm bảo bắt đầu từ đúng ngày truyền vào
     for (let w = 0; w < weeks; w++) {
       for (let d = 0; d < 7; d++) {
         const current = new Date(start);
@@ -137,51 +137,46 @@ exports.autoSchedule = async (req, res) => {
       }
     }
 
-    // 4. Xóa lịch cũ của chuyên khoa này trong khoảng thời gian (tránh trùng khi gọi lại)
-    await Shift.deleteMany({
-      specialty: specialty,
-      date: { $in: workingDays }
-    });
+    // 4. Xóa lịch cũ CỦA BỆNH VIỆN NÀY để tránh đụng độ
+    const deleteFilter = {
+        specialty: specialty,
+        date: { $in: workingDays }
+    };
+    if (adminHospital) deleteFilter.hospitalName = adminHospital;
+    await Shift.deleteMany(deleteFilter);
 
-    // 5. Round-robin: mỗi slot (ngày + ca) gán 1 bác sĩ theo vòng tròn
-    const SHIFTS = ['morning', 'afternoon']; // 2 ca / ngày
-    const shiftSlots = [];
-
-    workingDays.forEach(date => {
-      SHIFTS.forEach(shiftType => {
-        shiftSlots.push({ date, shift: shiftType });
-      });
-    });
-
-    // Tổng số slot = workingDays × 2 ca
-    // Mỗi bác sĩ sẽ làm: Math.floor(totalSlots / doctorCount) lần (phân đều)
+    // 5. THUẬT TOÁN ROUND-ROBIN
+    const SHIFTS = ['morning', 'afternoon'];
     const bulkInsert = [];
     let doctorIndex = 0;
 
-    shiftSlots.forEach(({ date, shift }) => {
-      const doctor = shuffled[doctorIndex % shuffled.length];
-      doctorIndex++;
+    workingDays.forEach(date => {
+      SHIFTS.forEach(shiftType => {
+        // Lấy bác sĩ hiện tại theo vòng xoay
+        const doctor = shuffled[doctorIndex % shuffled.length];
+        doctorIndex++; // Tăng chỉ số để ca tiếp theo rơi vào người khác
 
-      const doctorName = doctor.fullName || doctor['Họ và tên'] || 'Bác sĩ';
-      const doctorSpecialty = doctor.specialty || doctor['Chuyên Khoa'] || specialty;
+        const doctorName = doctor.fullName || doctor['Họ và tên'] || 'Bác sĩ';
+        const doctorSpecialty = doctor.specialty || doctor['Chuyên Khoa'] || specialty;
 
-      bulkInsert.push({
-        doctorId: doctor._id,
-        doctorName,
-        specialty: doctorSpecialty,
-        date,
-        shift,
-        room: `Phòng ${doctorSpecialty.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 5) + 1}`,
-        
-        status: 'active',
-        note: 'Tự động xếp lịch'
+        bulkInsert.push({
+          doctorId: doctor._id,
+          doctorName,
+          specialty: doctorSpecialty,
+          hospitalName: adminHospital || doctor.hospitalName || null, // ✅ Gắn thẻ bệnh viện vào ca trực
+          date,
+          shift: shiftType,
+          room: `Phòng ${doctorSpecialty.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 5) + 1}`,
+          status: 'active',
+          note: 'Tự động xếp lịch'
+        });
       });
     });
 
     // 6. Lưu hàng loạt vào DB
     await Shift.insertMany(bulkInsert);
 
-    // 7. Tính thống kê số buổi mỗi bác sĩ
+    // 7. Thống kê công bằng
     const summary = {};
     shuffled.forEach(d => {
       const name = d.fullName || d['Họ và tên'];
@@ -193,7 +188,7 @@ exports.autoSchedule = async (req, res) => {
 
     return res.status(201).json({
       success: true,
-      message: `✅ Đã tự động xếp lịch thành công cho chuyên khoa "${specialty}"`,
+      message: `✅ Đã tự động xếp lịch xoay vòng thành công cho chuyên khoa "${specialty}" tại ${adminHospital || 'hệ thống'}`,
       data: {
         totalShifts: bulkInsert.length,
         doctors: shuffled.length,
@@ -210,13 +205,10 @@ exports.autoSchedule = async (req, res) => {
 };
 
 // ─── XEM LỊCH THEO TUẦN ─────────────────────────────────────────────────────
-/**
- * @desc  Lấy lịch làm việc trong 1 tuần cụ thể
- * @route GET /api/v1/shifts/week?startDate=YYYY-MM-DD&specialty=...
- */
 exports.getWeeklySchedule = async (req, res) => {
   try {
     const { startDate, specialty } = req.query;
+    const adminHospital = req.user?.hospitalName || null;
 
     if (!startDate) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập startDate (YYYY-MM-DD)' });
@@ -232,6 +224,8 @@ exports.getWeeklySchedule = async (req, res) => {
 
     let filter = { date: { $in: dates } };
     if (specialty) filter.specialty = specialty;
+    // ✅ BỘ LỌC CÔ LẬP
+    if (adminHospital) filter.hospitalName = adminHospital;
 
     const shifts = await Shift.find(filter)
       .populate('doctorId', 'fullName specialty')
