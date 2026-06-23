@@ -1,12 +1,17 @@
 const Shift = require('../models/Shift');
 const mongoose = require('mongoose');
 
-// Hàm bổ trợ để đồng bộ hóa ngày về chuỗi "YYYY-MM-DD"
+// ✅ FIX: Hàm bổ trợ lấy chính xác Ngày - Tháng - Năm theo múi giờ Local Việt Nam (Không dùng .toISOString() để tránh lệch ngày)
 const formatDateString = (dateInput) => {
   if (!dateInput) return null;
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return null;
-  return d.toISOString().split('T')[0];
+  
+  const year = d.getFullYear();
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  
+  return `${year}-${month}-${day}`; // Trả về dạng chuỗi chuẩn "YYYY-MM-DD"
 };
 
 // ─── TẠO CA TRỰC THỦ CÔNG ───────────────────────────────────────────────────
@@ -19,7 +24,7 @@ exports.createShift = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Vui lòng chọn bác sĩ và ngày trực!' });
     }
 
-    // Chuẩn hóa ngày về chuỗi YYYY-MM-DD giống thuật toán autoSchedule
+    // Chuẩn hóa ngày về chuỗi YYYY-MM-DD
     const normalizedDate = formatDateString(date);
 
     const exists = await Shift.findOne({ doctorId, date: normalizedDate, shift });
@@ -32,12 +37,12 @@ exports.createShift = async (req, res) => {
       doctorId, 
       doctorName, 
       specialty, 
-      date: normalizedDate, // Lưu dạng chuỗi đồng bộ
+      date: normalizedDate, 
       shift, 
       room, 
       status, 
       note,
-      hospitalName: adminHospital // ✅ FIX LỖI: Điền thông tin bệnh viện cô lập
+      hospitalName: adminHospital // Cập nhật thông tin bệnh viện cô lập
     });
     
     await newShift.save();
@@ -55,7 +60,7 @@ exports.getAllShifts = async (req, res) => {
     const adminHospital = req.user?.hospitalName || null;
     let filter = {};
     
-    // ✅ BỘ LỌC CÔ LẬP: Admin chỉ thấy lịch trực của bệnh viện mình
+    // Admin chỉ thấy lịch trực của bệnh viện mình
     if (adminHospital) filter.hospitalName = adminHospital;
     
     if (doctorId) filter.doctorId = doctorId;
@@ -159,8 +164,9 @@ exports.autoSchedule = async (req, res) => {
         const dayOfWeek = current.getDay();
         if (dayOfWeek === 0) continue; 
 
-        const dateStr = current.toISOString().split('T')[0]; 
-        workingDays.push(dateStr);
+        // Chuẩn hóa ngày vòng lặp không sợ lệch giờ bằng hàm bổ trợ
+        const dateStr = formatDateString(current); 
+        if (dateStr) workingDays.push(dateStr);
       }
     }
 
@@ -188,7 +194,7 @@ exports.autoSchedule = async (req, res) => {
           doctorName,
           specialty: doctorSpecialty,
           hospitalName: adminHospital || doctor.hospitalName || null, 
-          date, // Đã là chuỗi YYYY-MM-DD
+          date, 
           shift: shiftType,
           room: `Phòng ${doctorSpecialty.substring(0, 3).toUpperCase()}-${Math.floor(Math.random() * 5) + 1}`,
           status: 'active',

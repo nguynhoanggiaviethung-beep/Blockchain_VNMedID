@@ -33,6 +33,17 @@ const ShiftBadge = ({ shift }) => {
 
 const DAYS_VI = ["Chủ nhật", "Thứ 2", "Thứ 3", "Thứ 4", "Thứ 5", "Thứ 6", "Thứ 7"]
 
+// ✅ HÀM BỔ TRỢ: Đảm bảo format ngày chuẩn YYYY-MM-DD theo giờ Việt Nam, chống lệch lùi 1 ngày khi dùng .toISOString()
+const toLocalDateString = (dateInput) => {
+  if (!dateInput) return "";
+  const d = new Date(dateInput);
+  if (isNaN(d.getTime())) return "";
+  const YYYY = d.getFullYear();
+  const MM = String(d.getMonth() + 1).padStart(2, '0');
+  const DD = String(d.getDate()).padStart(2, '0');
+  return `${YYYY}-${MM}-${DD}`;
+};
+
 export default function AdminSchedule() {
   const token = localStorage.getItem("token")
   const today = new Date() 
@@ -41,14 +52,18 @@ export default function AdminSchedule() {
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDoctor, setFilterDoctor] = useState("")
-  const [filterDate, setFilterDate] = useState("")
+  
+  // ✅ FIX TRÙNG BIẾN: Trích xuất ngày hôm nay dạng YYYY-MM-DD không lo crash app
+  const formattedToday = toLocalDateString(today);
+
+  const [filterDate, setFilterDate] = useState(formattedToday)
   const [filterShift, setFilterShift] = useState("")
   const [viewMode, setViewMode] = useState("table") 
 
   // Modal tạo mới
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({
-    doctorId: "", date: "2026-06-25", shift: "morning", 
+    doctorId: "", date: formattedToday, shift: "morning", 
     room: "Phòng 101", note: "", status: "active"
   })
   const [creating, setCreating] = useState(false)
@@ -79,7 +94,7 @@ export default function AdminSchedule() {
     setLoading(true)
     const params = {}
     if (filterDoctor) params.doctorId = filterDoctor
-    if (filterDate) params.date = filterDate
+    if (filterDate) params.date = toLocalDateString(filterDate) // Đồng bộ dạng chuỗi
     if (filterShift) params.shift = filterShift
     
     axios.get(`${BASE_URL}/shifts`, {
@@ -138,17 +153,8 @@ export default function AdminSchedule() {
       return
     }
 
-    let selectedDate = createForm.date;
-    try {
-      const d = new Date(createForm.date);
-      if (isNaN(d.getTime()) || d.getFullYear() < 2000) {
-        selectedDate = new Date().toISOString().slice(0, 10);
-      } else {
-        selectedDate = d.toISOString().slice(0, 10);
-      }
-    } catch (e) {
-      selectedDate = "2026-06-25"; 
-    }
+    // ✅ FIX LỖI: Đồng bộ format ngày tạo lịch chuẩn múi giờ địa phương Việt Nam
+    let selectedDate = toLocalDateString(createForm.date) || formattedToday;
 
     setCreating(true)
 
@@ -173,7 +179,6 @@ export default function AdminSchedule() {
 
         setBulkProgress({ current: i + 1, total: doctors.length })
         
-        // Đính kèm dữ liệu chuẩn xác của từng bác sĩ để tránh trống tên trong Database
         const batchPayload = {
           doctorId: doc._id,
           date: selectedDate,
@@ -198,7 +203,7 @@ export default function AdminSchedule() {
 
       alert(`Hoàn thành! Tạo thành công ${successCount} lịch trực. Thất bại: ${failCount}.`);
       setShowCreate(false)
-      setCreateForm({ doctorId: "", date: "2026-06-25", shift: "morning", room: "Phòng 101", note: "", status: "active" })
+      setCreateForm({ doctorId: "", date: formattedToday, shift: "morning", room: "Phòng 101", note: "", status: "active" })
       fetchSchedules()
       setCreating(false)
       return;
@@ -222,7 +227,7 @@ export default function AdminSchedule() {
         headers: { Authorization: `Bearer ${token}` }
       })
       setShowCreate(false)
-      setCreateForm({ doctorId: "", date: "2026-06-25", shift: "morning", room: "Phòng 101", note: "", status: "active" })
+      setCreateForm({ doctorId: "", date: formattedToday, shift: "morning", room: "Phòng 101", note: "", status: "active" })
       fetchSchedules()
     } catch (err) {
       alert("Lỗi tạo lịch: " + (err.response?.data?.message || err.message))
@@ -232,16 +237,8 @@ export default function AdminSchedule() {
   const openEdit = (s) => {
     if (!s) return;
     
-    let formattedDate = "";
-    if (s.date) {
-      try {
-        formattedDate = new Date(s.date).toISOString().slice(0, 10);
-      } catch (e) {
-        if (typeof s.date === 'string') {
-          formattedDate = s.date.slice(0, 10);
-        }
-      }
-    }
+    // ✅ FIX LỖI: Sửa hàm format ngày sửa lịch tránh bóp méo lùi ngày cũ
+    let formattedDate = toLocalDateString(s.date);
 
     setEditTarget(s._id)
     setEditForm({
@@ -257,7 +254,11 @@ export default function AdminSchedule() {
   const handleSave = async () => {
     setSaving(true)
     try {
-      await axios.put(`${BASE_URL}/shifts/${editTarget}`, editForm, {
+      const updatePayload = {
+        ...editForm,
+        date: toLocalDateString(editForm.date)
+      };
+      await axios.put(`${BASE_URL}/shifts/${editTarget}`, updatePayload, {
         headers: { Authorization: `Bearer ${token}` }
       })
       setEditTarget(null)
@@ -296,15 +297,11 @@ export default function AdminSchedule() {
 
   const getSchedulesForDay = (date) => {
     if (!date) return [];
-    const dateStr = date.toISOString().slice(0, 10)
+    const dateStr = toLocalDateString(date); // ✅ FIX LỖI: Đồng nhất hàm kiểm định ngày trong Chế độ tuần
     return schedules.filter(s => {
       if (!s.date) return false;
-      try {
-        const sDate = new Date(s.date).toISOString().slice(0, 10)
-        return sDate === dateStr
-      } catch (e) {
-        return false;
-      }
+      const sDate = toLocalDateString(s.date);
+      return sDate === dateStr;
     })
   }
 
@@ -613,7 +610,7 @@ export default function AdminSchedule() {
             <div style={{ fontSize: 48, marginBottom: 12 }}>⚠️</div>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>Xác nhận xóa lịch</h3>
             <p style={{ color: GRAY_TEXT, fontSize: 14 }}>
-              Xóa lịch trực của <strong>{confirmDelete.doctorId?.fullName || "bác sĩ này"}</strong> ngày <strong>{confirmDelete.date ? new Date(confirmDelete.date).toLocaleDateString("vi-VN") : ""}</strong>?
+              Xóa lịch trực của <strong>{confirmDelete.doctorId?.fullName || confirmDelete.doctorName || "bác sĩ này"}</strong> ngày <strong>{confirmDelete.date ? new Date(confirmDelete.date).toLocaleDateString("vi-VN") : ""}</strong>?
               <br />Hành động này không thể hoàn tác.
             </p>
             <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 24 }}>
