@@ -3,8 +3,8 @@ import axios from 'axios';
 
 const SPECIALTIES = [
   "Nội tổng quát", "Ngoại tổng quát", "Nhi khoa",
-  "Tim mạch", "Da liễu", "Tai mũi họng",
-  "Mắt", "Răng hàm mặt", "Thần kinh", "Xương khớp",
+  "Tim mạch", "Da liễu", "Tai Mũi Họng",
+  "Mắt", "Răng Hàm Mặt", "Thần kinh", "Xương khớp",
 ];
 
 export default function PatientBookingForm() {
