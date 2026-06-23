@@ -132,7 +132,7 @@ export default function PatientDashboard() {
   useEffect(() => {
     const fetchHospitals = async () => {
       try {
-        const res = await axios.get(`${BASE_URL}/hospitals`, { headers });
+        const res = await axios.get(`${BASE_URL}/doctors/hospitals`, { headers });
         if (res.data?.success) {
           const hospitalData = res.data.hospitals || res.data.data || [];
           setHospitals(hospitalData);
@@ -413,6 +413,7 @@ export default function PatientDashboard() {
         patientName: localStorage.getItem("fullName") || fullName,
         specialty: formAppointment.specialty, 
         chuyenKhoa: formAppointment.specialty,
+        date: formattedDate,
         appointmentDate: formattedDate,
         ngayKham: formattedDate,
         hospitalName: formAppointment.hospitalName,
@@ -421,8 +422,8 @@ export default function PatientDashboard() {
         reason: formAppointment.reason,
         
         // Cung cấp trường ca khám giải quyết dứt điểm lỗi trong ảnh image_c66be3.png
-        caKham: formAppointment.caKham,
         shift: formAppointment.caKham,
+        caKham: formAppointment.caKham,
         timeSlot: formAppointment.caKham
       };
       
