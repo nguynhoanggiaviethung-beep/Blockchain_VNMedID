@@ -177,36 +177,27 @@ try {
  * mà không qua mongoose model khép kín, một số trường hợp Mongoose Model `Doctor.findById` 
  * sẽ bị rỗng nếu Schema cấu trúc không khớp. Đổi sang dùng db.collection('doctors') gốc để ăn chặt 100%.
  */
-const getDoctorById = async (req, res) => {
-    try {
-        const { id } = req.params;
-        const db = mongoose.connection.db;
-        
-        // Chuyển string ID nhận từ client về dạng ObjectId để tìm chính xác
-        const objId = new mongoose.Types.ObjectId(id);
-        
-        // Dùng bộ driver gốc để tìm theo đúng cơ chế ép chung _id lúc tạo của bạn
-        const doctor = await db.collection('doctors').findOne({ _id: objId });
-        
-        if (!doctor) {
-            return res.status(404).json({ 
-                success: false, 
-                message: 'Không tìm thấy thông tin hồ sơ của bác sĩ này!' 
-            });
-        }
-        
-        return res.status(200).json({ 
-            success: true, 
-            data: doctor 
-        });
+exports.getDoctorById = async (req, res) => {
+  try {
+    const { id } = req.params;
 
-    } catch (error) {
-        return res.status(500).json({ 
-            success: false, 
-            message: 'Lỗi hệ thống khi truy vấn dữ liệu bác sĩ!', 
-            error: error.message 
-        });
+    // 🌟 SỬA KHÚC NÀY: Tìm theo _id gốc HOẶC trường liên kết userId lưu trong bảng Doctor
+    // (Nếu hệ thống của ông gộp chung vào bảng User, hãy đổi chữ 'Doctor' thành 'User')
+    const doctor = await Doctor.findOne({
+      $or: [
+        { _id: id },
+        { userId: id } 
+      ]
+    });
+
+    if (!doctor) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy thông tin hồ sơ của bác sĩ này!' });
     }
+
+    return res.json({ success: true, data: doctor });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
 };
 
 /**
