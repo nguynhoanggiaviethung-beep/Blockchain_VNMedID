@@ -11,7 +11,8 @@ const SUCCESS = "#16A34A"
 const SUCCESS_LIGHT = "#DCFCE7"
 const WARNING = "#D97706"
 const WARNING_LIGHT = "#FEF3C7"
-const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1"
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1"
+
 
 const SHIFT_MAP = {
   morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,    bg: WARNING_LIGHT },
@@ -79,7 +80,7 @@ export default function AdminSchedule() {
     if (d.getTime() === today.getTime()) return { label: "Đang khám", bg: SUCCESS_LIGHT, color: SUCCESS, icon: "🔥" };
     return { label: "Chưa khám", bg: PRIMARY_LIGHT, color: PRIMARY_MED, icon: "📅" };
   };
-  
+
 
   const fetchSchedules = () => {
     setLoading(true)
