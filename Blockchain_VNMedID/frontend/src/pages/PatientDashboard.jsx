@@ -16,7 +16,10 @@ const WHITE = "#FFFFFF";
 const GRAY_TEXT = "#5F6B7A";
 const BORDER = "#CBD5E1";
 
-const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1";
+// Thêm 2 dòng này vào đầu component PatientDashboard
+const [hospitals, setHospitals] = useState([]);
+const [loadingHospitals, setLoadingHospitals] = useState(true);
+const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
 const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
 
 const HOSPITALS = [
