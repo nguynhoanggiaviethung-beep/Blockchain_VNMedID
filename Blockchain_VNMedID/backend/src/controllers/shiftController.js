@@ -1,9 +1,25 @@
 const Shift = require('../models/Shift');
 const mongoose = require('mongoose');
 
-// ✅ Hàm bổ trợ lấy chính xác Ngày - Tháng - Năm theo múi giờ Local Việt Nam
+// ✅ FIX CHÍ MẠNG: Hàm bổ trợ bẫy mọi định dạng ngày từ Frontend (YYYY-MM-DD, ISO String, v.v.) 
+// Đảm bảo luôn trả về chuỗi sạch dạng "YYYY-MM-DD" để khớp chính xác dữ liệu trong DB
 const formatDateString = (dateInput) => {
   if (!dateInput) return null;
+  
+  // Nếu là chuỗi và chứa ký tự gạch ngang (VD: "2026-06-23" hoặc "2026-06-23T00:00:00.000Z")
+  if (typeof dateInput === 'string' && dateInput.includes('-')) {
+    return dateInput.split('T')[0]; // Cắt bỏ toàn bộ phần giờ phía sau nếu có
+  }
+
+  // Nếu là chuỗi dạng DD/MM/YYYY (Nếu Frontend truyền định dạng ngày Việt Nam)
+  if (typeof dateInput === 'string' && dateInput.includes('/')) {
+    const parts = dateInput.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1]}-${parts[0]}`; // Đảo lại thành YYYY-MM-DD
+    }
+  }
+
+  // Trường hợp còn lại (Date Object hoặc định dạng khác)
   const d = new Date(dateInput);
   if (isNaN(d.getTime())) return null;
   
