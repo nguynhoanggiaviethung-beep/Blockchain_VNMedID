@@ -18,7 +18,36 @@ const BORDER = "#CBD5E1";
 
 const HOSPITALS = [
   "Bệnh viện Chợ Rẫy",
-  "Bệnh viện Đại học Y Dược"
+  "Bệnh viện Đại học Y Dược",
+  "Bệnh viện Nhi Đồng 1",
+  "Bệnh viện Nhi Đồng 2",
+  "Bệnh viện Thống Nhất",
+  "Bệnh viện Bình Dân",
+  "Bệnh viện Phạm Ngọc Thạch",
+  "Bệnh viện Nguyễn Tri Phương",
+  "Bệnh viện Hùng Vương",
+  "Bệnh viện Từ Dũ",
+  "Bệnh viện Gia Định",
+  "Bệnh viện 115",
+  "Bệnh viện Quận 1",
+  "Bệnh viện Quận 3",
+  "Bệnh viện Quận 4",
+  "Bệnh viện Quận 5",
+  "Bệnh viện Đa khoa Bình Phú",
+  "Bệnh viện Đa khoa Sài Gòn",
+  "Bệnh viện Đa khoa Hoàn Mỹ",
+  "Bệnh viện Đa khoa Hồng Đức",
+  "Bệnh viện Đa khoa Quốc tế Vinmec Central Park",
+  "Bệnh viện Răng Hàm Mặt",
+  "Bệnh viện Mắt Sài Gòn",
+  "Bệnh viện Tai Mũi Họng",
+  "Bệnh viện Da Liễu",
+  "Bệnh viện Tâm Thần",
+  "Bệnh viện Phục Hồi Chức Năng",
+  "Bệnh viện Y học Cổ truyền",
+  "Bệnh viện Ung Bướu",
+  "Bệnh viện Quốc tế City",
+  "Bệnh viện Quốc tế Hạnh Phúc"
 ];
 
 // Inline Styles dùng chung cố định tránh việc re-render tạo đối tượng mới liên tục
