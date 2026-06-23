@@ -1,7 +1,7 @@
 const Shift = require('../models/Shift');
 const mongoose = require('mongoose');
 
-// ✅ FIX: Hàm bổ trợ lấy chính xác Ngày - Tháng - Năm theo múi giờ Local Việt Nam (Không dùng .toISOString() để tránh lệch ngày)
+// ✅ Hàm bổ trợ lấy chính xác Ngày - Tháng - Năm theo múi giờ Local Việt Nam
 const formatDateString = (dateInput) => {
   if (!dateInput) return null;
   const d = new Date(dateInput);
@@ -11,20 +11,19 @@ const formatDateString = (dateInput) => {
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   
-  return `${year}-${month}-${day}`; // Trả về dạng chuỗi chuẩn "YYYY-MM-DD"
+  return `${year}-${month}-${day}`;
 };
 
 // ─── TẠO CA TRỰC THỦ CÔNG ───────────────────────────────────────────────────
 exports.createShift = async (req, res) => {
   try {
     const { doctorId, doctorName, specialty, date, shift, room, status, note } = req.body;
-    const adminHospital = req.user?.hospitalName || null; // Lấy thông tin bệnh viện của admin
+    const adminHospital = req.user?.hospitalName || null;
 
     if (!doctorId || !date) {
       return res.status(400).json({ success: false, message: 'Vui lòng chọn bác sĩ và ngày trực!' });
     }
 
-    // Chuẩn hóa ngày về chuỗi YYYY-MM-DD
     const normalizedDate = formatDateString(date);
 
     const exists = await Shift.findOne({ doctorId, date: normalizedDate, shift });
@@ -32,7 +31,6 @@ exports.createShift = async (req, res) => {
       return res.status(400).json({ success: false, message: 'Bác sĩ này đã có ca trực vào khung giờ đó!' });
     }
 
-    // Đảm bảo cập nhật hospitalName của admin vào bản ghi mới tạo thủ công
     const newShift = new Shift({ 
       doctorId, 
       doctorName, 
@@ -42,32 +40,36 @@ exports.createShift = async (req, res) => {
       room, 
       status, 
       note,
-      hospitalName: adminHospital // Cập nhật thông tin bệnh viện cô lập
+      hospitalName: adminHospital
     });
     
     await newShift.save();
-
     return res.status(201).json({ success: true, data: newShift });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
 
-// ─── LẤY TẤT CẢ CA TRỰC ────────────────────────────────────────────────────
+// ─── LẤY TẤT CẢ CA TRỰC (FIXED FOR CLIENT & ADMIN) ──────────────────────────
 exports.getAllShifts = async (req, res) => {
   try {
-    const { doctorId, date, shift: shiftType, specialty } = req.query;
+    // Thêm hospitalName nhận từ query params của Frontend gửi lên
+    const { doctorId, date, shift: shiftType, specialty, hospitalName } = req.query;
     const adminHospital = req.user?.hospitalName || null;
     let filter = {};
     
-    // Admin chỉ thấy lịch trực của bệnh viện mình
-    if (adminHospital) filter.hospitalName = adminHospital;
+    // ✅ FIX LOGIC: Nếu là Admin đăng nhập thì ép buộc lọc theo bệnh viện quản lý. 
+    // Nếu là Bệnh nhân (không có adminHospital) thì lọc theo bệnh viện bệnh nhân đang chọn ở giao diện.
+    if (adminHospital) {
+      filter.hospitalName = adminHospital;
+    } else if (hospitalName) {
+      filter.hospitalName = hospitalName;
+    }
     
     if (doctorId) filter.doctorId = doctorId;
     if (shiftType) filter.shift = shiftType;
     if (specialty) filter.specialty = specialty;
     
-    // Chuẩn hóa query date trước khi nạp vào filter để tìm kiếm dạng chuỗi chính xác
     if (date) {
       const normalizedDate = formatDateString(date);
       if (normalizedDate) filter.date = normalizedDate;
@@ -91,7 +93,7 @@ exports.updateShift = async (req, res) => {
   try {
     const updateData = { ...req.body };
     if (updateData.date) {
-      updateData.date = formatDateString(updateData.date); // Chuẩn hóa nếu có sửa ngày
+      updateData.date = formatDateString(updateData.date);
     }
 
     const updated = await Shift.findByIdAndUpdate(req.params.id, updateData, { new: true });
@@ -164,7 +166,6 @@ exports.autoSchedule = async (req, res) => {
         const dayOfWeek = current.getDay();
         if (dayOfWeek === 0) continue; 
 
-        // Chuẩn hóa ngày vòng lặp không sợ lệch giờ bằng hàm bổ trợ
         const dateStr = formatDateString(current); 
         if (dateStr) workingDays.push(dateStr);
       }

@@ -6,7 +6,6 @@ const shiftController = require('../controllers/shiftController');
 
 // ── AUTO SCHEDULE (Admin bấm 1 nút → máy tự xếp) ──────────────────────────
 // POST /api/v1/shifts/auto-schedule
-// Body: { specialty: "Răng Hàm Mặt", startDate: "2025-01-06", weeks: 4 }
 router.post(
   '/auto-schedule',
   xacThucToken,
@@ -15,7 +14,7 @@ router.post(
 );
 
 // ── XEM LỊCH THEO TUẦN ─────────────────────────────────────────────────────
-// GET /api/v1/shifts/week?startDate=2025-01-06&specialty=Răng Hàm Mặt
+// GET /api/v1/shifts/week
 router.get(
   '/week',
   xacThucToken,
@@ -24,15 +23,15 @@ router.get(
 );
 
 // ── CRUD CÁ NHÂN ────────────────────────────────────────────────────────────
-// Lấy tất cả ca trực (có filter)
+// FIX: Thêm 'patient' vào phân quyền để giao diện Đặt lịch phía Client gọi API check ca trực thành công
 router.get(
   '/',
   xacThucToken,
-  phanQuyen('admin', 'doctor'),
-  shiftController.getAllShifts
+  phanQuyen('admin', 'doctor', 'patient'), 
+  shiftController.getAllShifts // Đảm bảo trong shiftController.js của ông có export hàm tên này
 );
 
-// Tạo ca trực thủ công (nếu cần)
+// Tạo ca trực thủ công
 router.post(
   '/',
   xacThucToken,
