@@ -42,12 +42,21 @@ exports.bookAppointment = async (req, res) => {
     if (!patientId || !specialty || !appointmentDate || !hospitalName || !shift) {
       return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám, ca khám và bệnh viện!' });
     }
+  
+    let DB_shift = shift;
+    if (typeof shift === 'string') {
+      if (shift.includes('Sáng') || shift.toLowerCase().includes('morning')) {
+        DB_shift = 'morning';
+      } else if (shift.includes('Chiều') || shift.toLowerCase().includes('afternoon')) {
+        DB_shift = 'afternoon';
+      }
+    }
 
     // 1. TỰ ĐỘNG TÌM BÁC SĨ ĐANG TRỰC
     // Máy sẽ dò xem ngày hôm đó, ca đó, chuyên khoa đó có bác sĩ nào đang có lịch active không
     const activeShift = await Shift.findOne({
         date: appointmentDate,
-        shift: shift,
+        shift: DB_shift,
         specialty: specialty,
         status: 'active'
     });
