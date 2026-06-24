@@ -57,9 +57,9 @@ export default function DoctorDashboard() {
     try {
       setLoading(true)
       const [pendingRes, completedRes] = await Promise.all([
-        axiosOriginal.get(`${BASE_URL}/visits`, {
+        axiosOriginal.get(`${BASE_URL}/visits/pending-hospital`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'pending', specialty: specialtyName, date: dateQuery }
+          params: { status: 'examining', specialty: specialtyName, date: dateQuery }
         }),
         axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
@@ -89,7 +89,7 @@ export default function DoctorDashboard() {
         if (res?.data?.success && res?.data?.data) {
           const d = res.data.data
           currentSpecialty = d?.specialty || d?.["Chuyên Khoa"] || currentSpecialty
-          const hName = d?.["Tên Bệnh viện"] || d?.hospitalName || localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID"
+          const hName = d?.hospitalName || d?.["Tên Bệnh viện"] || localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID"
           
           localStorage.setItem("hospitalName", hName)
 
@@ -265,6 +265,8 @@ export default function DoctorDashboard() {
   const displayList = activeFilter === "pending" ? patientList
     : activeFilter === "completed" ? completedList
     : [...patientList, ...completedList]
+
+  console.log("=== CHECK BIẾN HOSPITAL NAME ===", doctorInfo?.hospitalName);
 
   return (
     <div style={{ minHeight: "100vh", background: BG_GLOBAL, fontFamily: "'Segoe UI', Roboto, sans-serif", color: "#1E293B" }}>
