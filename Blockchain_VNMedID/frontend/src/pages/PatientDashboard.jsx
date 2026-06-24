@@ -6,9 +6,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import axios from 'axios';
 
-
 dayjs.locale('vi');
-
 
 // Định nghĩa màu sắc thương hiệu hệ thống VNmedID
 const PRIMARY = "#0A2D6E";
@@ -17,7 +15,6 @@ const PRIMARY_LIGHT = "#E6F1FB";
 const WHITE = "#FFFFFF";
 const GRAY_TEXT = "#5F6B7A";
 const BORDER = "#CBD5E1";
-
 
 const HOSPITALS = [
   "Bệnh viện Chợ Rẫy",
@@ -53,7 +50,6 @@ const HOSPITALS = [
   "Bệnh viện Quốc tế Hạnh Phúc"
 ];
 
-
 // Inline Styles dùng chung cố định tránh việc re-render tạo đối tượng mới liên tục
 const inputStyle = {
   width: "100%", padding: "10px 14px", borderRadius: 8,
@@ -62,19 +58,16 @@ const inputStyle = {
 };
 const labelStyle = { fontSize: 13, fontWeight: 500, color: "#374151" };
 
-
 export default function PatientDashboard() {
   const navigate = useNavigate();
   const fullName = localStorage.getItem("fullName") || "Bệnh nhân";
   const userId = localStorage.getItem("userId");
   const token = localStorage.getItem("token");
 
-
   // State và cấu hình API đặt bên trong Component theo chuẩn React Hook
   const [hospitals, setHospitals] = useState([]);
   const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
   const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
-
 
   // State quản lý dữ liệu Bệnh nhân
   const [patient, setPatient] = useState(null);
@@ -84,18 +77,15 @@ export default function PatientDashboard() {
   const [saveSuccess, setSaveSuccess] = useState("");
   const [error, setError] = useState("");
 
-
   // State quản lý Lịch sử khám bệnh (MongoDB)
   const [historyList, setHistoryList] = useState([]);
   const [loadingHistory, setLoadingHistory] = useState(true);
   const [activeStatFilter, setActiveStatFilter] = useState("all");
 
-
   // State quản lý Bệnh án On-chain (Blockchain)
   const [blockchainData, setBlockchainData] = useState(null);
   const [loadingBlockchain, setLoadingBlockchain] = useState(false);
   const [blockchainError, setBlockchainError] = useState("");
-
 
   // State quản lý Hóa đơn & Viện phí
   const [invoiceList, setInvoiceList] = useState([]);
@@ -105,24 +95,20 @@ export default function PatientDashboard() {
   const [invoiceSuccess, setInvoiceSuccess] = useState("");
   const [txPending, setTxPending] = useState("");
 
-
   // State quản lý Yêu cầu cấp quyền xem hồ sơ của Bác sĩ
   const [accessRequests, setAccessRequests] = useState([]);
   const [loadingAccess, setLoadingAccess] = useState(false);
   const [approvingId, setApprovingId] = useState(null);
-
 
   // States quản lý biểu mẫu (Forms) - Đã thêm caKham mặc định là rỗng để người dùng chọn công tâm
   const [formBasic, setFormBasic] = useState({ fullName: "", dob: "", gender: "", phone: "", address: "" });
   const [formHealth, setFormHealth] = useState({ nhomMau: "", tienSuBenh: "", diUng: "", trieuChung: "", ghiChu: "" });
   const [formAppointment, setFormAppointment] = useState({ specialty: "", hospitalName: "", date: null, caKham: "", reason: "" });
 
-
   const headers = {
     "Content-Type": "application/json",
     "Authorization": `Bearer ${token}`
   };
-
 
   // 1. Tải hồ sơ bệnh án On-chain từ Smart Contract (thông qua Backend Oracle)
   const loadBlockchainRecords = async (patientIdentifier) => {
@@ -142,7 +128,6 @@ export default function PatientDashboard() {
     }
   };
 
-
   // 2. Chạy lần đầu: Lấy thông tin cá nhân, lịch sử khám và danh sách bệnh viện động
   useEffect(() => {
     const fetchHospitals = async () => {
@@ -156,7 +141,6 @@ export default function PatientDashboard() {
         console.error("Lỗi tải danh sách bệnh viện từ API (Có thể bỏ qua nếu dùng danh sách cứng):", err.message);
       }
     };
-
 
     const loadPatientInfo = async () => {
       try {
@@ -179,7 +163,6 @@ export default function PatientDashboard() {
       finally { setLoading(false); }
     };
 
-
     const loadMedicalHistory = async () => {
       try {
         const res = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers });
@@ -188,7 +171,6 @@ export default function PatientDashboard() {
       } catch (err) { console.error("Lỗi tải lịch sử khám:", err); }
       finally { setLoadingHistory(false); }
     };
-
 
     if (userId) {
       loadPatientInfo();
@@ -199,7 +181,6 @@ export default function PatientDashboard() {
       setLoadingHistory(false);
     }
   }, [userId]);
-
 
   // 3. Tải danh sách Hóa đơn
   const loadInvoices = async () => {
@@ -214,7 +195,6 @@ export default function PatientDashboard() {
     finally { setLoadingInvoice(false); }
   };
 
-
   // 4. Tải danh sách Yêu cầu cấp quyền truy cập từ Bác sĩ
   const loadAccessRequests = async () => {
     if (!userId) return;
@@ -226,7 +206,6 @@ export default function PatientDashboard() {
     finally { setLoadingAccess(false); }
   };
 
-
   // Trình điều phối tải lại dữ liệu động khi chuyển đổi các Tab chức năng
   useEffect(() => {
     if (tab === "invoice") loadInvoices();
@@ -234,47 +213,40 @@ export default function PatientDashboard() {
     if (tab === "info" && userId) loadBlockchainRecords(userId);
   }, [tab]);
 
-
   // 5. Xử lý thanh toán hóa đơn bằng ví Web3 MetaMask
   const handlePayWithMetaMask = async (invoice) => {
     setInvoiceError("");
     setInvoiceSuccess("");
     setTxPending("");
 
-
     if (!window.ethereum) {
       setInvoiceError("Hệ thống không tìm thấy ví MetaMask. Vui lòng cài đặt tiện ích này!");
       return;
     }
 
-
     try {
       setPayingId(invoice.invoiceId);
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
-      const walletAddress = accounts[0];
-
+      const walletAddress = accounts[0]; 
 
       if (invoice.patientWallet && walletAddress.toLowerCase() !== invoice.patientWallet.toLowerCase()) {
         setInvoiceError(`Hóa đơn này được tạo riêng cho ví: ...${invoice.patientWallet.slice(-6)}. Ví hiện tại của bạn là: ...${walletAddress.slice(-6)}`);
         return;
       }
 
-
       const amountWei = BigInt(invoice.amountInWei || Math.round(invoice.amount * 1e18));
       const amountHex = "0x" + amountWei.toString(16);
 
-
-      const selector = "7c9495b2";
+      const selector = "7c9495b2"; 
       const strBytes = Array.from(new TextEncoder().encode(invoice.invoiceId));
       const strHex = strBytes.map(b => b.toString(16).padStart(2, "0")).join("");
-     
+      
       const offsetPart = "0000000000000000000000000000000000000000000000000000000000000020";
       const lengthPart = strBytes.length.toString(16).padStart(64, "0");
       const targetLength = Math.ceil(strHex.length / 64) * 64 || 64;
       const contentPart = strHex.padEnd(targetLength, "0");
-     
+      
       const finalCalldata = "0x" + selector + offsetPart + lengthPart + contentPart;
-
 
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
@@ -287,14 +259,11 @@ export default function PatientDashboard() {
         }]
       });
 
-
       setTxPending(txHash);
       setInvoiceSuccess("⏳ Lệnh chuyển tiền thành công! Đang đợi thợ đào xác thực khối trên Sepolia...");
 
-
       let isSuccess = false;
       let receipt = null;
-
 
       for (let i = 0; i < 40; i++) {
         await new Promise(r => setTimeout(r, 3000));
@@ -310,20 +279,17 @@ export default function PatientDashboard() {
         } catch (err) { console.error("Đang đọc tiến trình receipt ngầm...", err); }
       }
 
-
       if (!receipt) {
         setTxPending("");
         setInvoiceError("⚠️ Không nhận được biên lai từ mạng lưới Sepolia (Mạng bận). Hãy kiểm tra lại sau ít phút.");
         return;
       }
 
-
       if (!isSuccess) {
         setTxPending("");
         setInvoiceError("❌ Giao dịch đã bị từ chối/thất bại trên Blockchain (Reverted)! Vui lòng kiểm tra số dư ví.");
         return;
       }
-
 
       try {
         const response = await axios.post(
@@ -332,11 +298,10 @@ export default function PatientDashboard() {
           { headers }
         );
 
-
         if (response.data.success) {
           setInvoiceSuccess("🎉 Thanh toán viện phí thành công! Trạng thái hệ thống đã được đồng bộ đồng nhất.");
           setTxPending("");
-          await loadInvoices();
+          await loadInvoices(); 
         } else {
           setInvoiceError(`Cảnh báo: Tiền đã trừ trên Blockchain, nhưng máy chủ backend trả về lỗi: ${response.data.message}`);
         }
@@ -344,7 +309,6 @@ export default function PatientDashboard() {
         console.error("Lỗi gọi API hậu thanh toán:", apiErr);
         setInvoiceError("⚠️ Tiền đã chuyển thành công qua Smart Contract, nhưng xảy ra lỗi kết nối đồng bộ cơ sở dữ liệu.");
       }
-
 
     } catch (err) {
       if (err.code === 4001) setInvoiceError("Thao tác hủy bỏ: Bạn đã chủ động hủy giao dịch trên ví MetaMask.");
@@ -354,25 +318,22 @@ export default function PatientDashboard() {
     }
   };
 
-
   // 6. Xử lý ký duyệt cấp quyền truy cập bệnh án bảo mật cho Bác sĩ
   const handleApproveRequest = async (request) => {
     setError("");
     setSaveSuccess("");
-   
+    
     if (!window.ethereum) {
       setError("Vui lòng tải ví điện tử MetaMask để thực hiện ký xác thực danh tính bảo mật!");
       return;
     }
 
-
     try {
       setApprovingId(request._id);
-     
+      
       await window.ethereum.request({ method: "wallet_requestPermissions", params: [{ eth_accounts: {} }] });
       const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
       const walletAddress = accounts[0];
-
 
       if (walletAddress.toLowerCase() !== request.patientWallet.toLowerCase()) {
         setError(`Sai địa chỉ ví! Vui lòng chọn tài khoản ví kết thúc bằng: ...${request.patientWallet.slice(-6)}`);
@@ -380,21 +341,16 @@ export default function PatientDashboard() {
         return;
       }
 
-
       const message = `Toi dong y cap quyen cho bac si ${request.doctorWallet.toLowerCase()} xem ho so cua toi (${request.patientId})`;
-
 
       const signature = await window.ethereum.request({
         method: "personal_sign",
         params: [message, walletAddress],
       });
 
-
       showSuccess("Ký số danh tính thành công! Đang truyền gói tin bảo mật tới hệ thống tổng đài...");
 
-
       const res = await axios.post(`${BASE_URL}/access/requests/${request._id}/approve`, { signature }, { headers });
-
 
       if (res.data.success) {
         showSuccess(`🎉 Duyệt quyền thành công! Giao dịch băm bảo mật đã ghi nhận lên Blockchain.`);
@@ -402,7 +358,6 @@ export default function PatientDashboard() {
       } else {
         setError(res.data.message || "Cơ sở dữ liệu từ chối xử lý chữ ký số này.");
       }
-
 
     } catch (err) {
       if (err.code === 4001) setError("Thao tác hủy bỏ: Bạn đã từ chối ký số thông điệp trên MetaMask.");
@@ -412,9 +367,7 @@ export default function PatientDashboard() {
     }
   };
 
-
   const showSuccess = (msg) => { setSaveSuccess(msg); setTimeout(() => setSaveSuccess(""), 4000); };
-
 
   // 7. Lưu thay đổi dữ liệu cơ bản (MongoDB)
   const handleSaveBasic = async () => {
@@ -428,7 +381,6 @@ export default function PatientDashboard() {
     finally { setSaving(false); }
   };
 
-
   // 8. Lưu thay đổi hồ sơ sức khỏe thường thức (MongoDB)
   const handleSaveHealth = async () => {
     setSaving(true); setError("");
@@ -441,7 +393,6 @@ export default function PatientDashboard() {
     finally { setSaving(false); }
   };
 
-
   // 9. Đăng ký lịch hẹn khám mới
   const handleBookAppointment = async (e) => {
     e.preventDefault();
@@ -449,62 +400,60 @@ export default function PatientDashboard() {
     if (!formAppointment.specialty) { setError("Vui lòng chọn Chuyên khoa đăng ký khám!"); return; }
     if (!formAppointment.date) { setError("Vui lòng chọn thời gian ngày hẹn khám bệnh!"); return; }
     if (!formAppointment.caKham) { setError("Vui lòng chỉ định Ca khám thích hợp (Ca Sáng / Ca Chiều)!"); return; }
-   
-    setSaving(true);
+    
+    setSaving(true); 
     setError("");
-   
+    
     try {
       const formattedDate = formAppointment.date.format("YYYY-MM-DD");
-     
+      
       // Đồng bộ các loại key ca khám để vượt qua lớp filter nghiêm ngặt của Backend
       const payloadData = {
-        patientId: userId,
+        patientId: userId, 
         patientName: localStorage.getItem("fullName") || fullName,
-        specialty: formAppointment.specialty,
+        specialty: formAppointment.specialty, 
         chuyenKhoa: formAppointment.specialty,
         date: formattedDate,
         appointmentDate: formattedDate,
         ngayKham: formattedDate,
         hospitalName: formAppointment.hospitalName,
         benhVien: formAppointment.hospitalName,
-        trieuChungLamSang: formAppointment.reason,
+        trieuChungLamSang: formAppointment.reason, 
         status: "pending",
         reason: formAppointment.reason,
-       
+        
         // Cung cấp trường ca khám giải quyết dứt điểm lỗi trong ảnh image_c66be3.png
         shift: formAppointment.caKham,
         caKham: formAppointment.caKham,
         timeSlot: formAppointment.caKham
       };
-     
-      const resRecord = await fetch(`${BASE_URL}/visits`, {
-        method: "POST",
-        headers,
-        body: JSON.stringify(payloadData)
+      
+      const resRecord = await fetch(`${BASE_URL}/visits`, { 
+        method: "POST", 
+        headers, 
+        body: JSON.stringify(payloadData) 
       });
       const dataRecord = await resRecord.json();
-     
+      
       if (dataRecord.success) {
         const resHistory = await fetch(`${BASE_URL}/visits/my?patientId=${userId}`, { headers });
         const dataHistory = await resHistory.json();
         if (dataHistory.success) setHistoryList(dataHistory.data || []);
-       
+        
         showSuccess("Khởi tạo phiếu hẹn đăng ký khám bệnh thành công!");
         setFormAppointment({ specialty: "", hospitalName: "", date: null, caKham: "", reason: "" });
         setTab("info");
       } else {
         setError(dataRecord.message || "Lỗi xử lý tạo lịch khám từ máy chủ.");
       }
-    } catch {
-      setError("Lỗi kết nối mạng tổng đài.");
-    } finally {
-      setSaving(false);
+    } catch { 
+      setError("Lỗi kết nối mạng tổng đài."); 
+    } finally { 
+      setSaving(false); 
     }
   };
 
-
   const handleLogout = () => { localStorage.clear(); navigate("/"); };
-
 
   const handleStatCardClick = (filterType) => {
     setActiveStatFilter(filterType); setTab("info");
@@ -514,14 +463,12 @@ export default function PatientDashboard() {
     }, 120);
   };
 
-
   const Field = ({ label, value }) => (
     <div style={{ background: PRIMARY_LIGHT, borderRadius: 8, padding: "12px 16px" }}>
       <div style={{ fontSize: 12, color: GRAY_TEXT }}>{label}</div>
       <div style={{ fontWeight: 600, color: PRIMARY, marginTop: 2 }}>{value || "—"}</div>
     </div>
   );
-
 
   const TABS = [
     { key: "info",     label: "📄 Hồ sơ & Lịch sử" },
@@ -532,10 +479,8 @@ export default function PatientDashboard() {
     { key: "health",   label: "🏥 Sửa Sức khỏe" },
   ];
 
-
   const completedList = historyList.filter(r => r.status === "completed");
   const pendingList   = historyList.filter(r => r.status === "pending");
-
 
   return (
     <div style={{ minHeight: "100vh", background: "#F4F7FB", fontFamily: "'Segoe UI', Arial, sans-serif" }}>
@@ -548,13 +493,11 @@ export default function PatientDashboard() {
         </div>
       </div>
 
-
       <div style={{ padding: "32px" }}>
         <div style={{ marginBottom: 28 }}>
           <h2 style={{ color: PRIMARY, margin: 0 }}>Xin chào bệnh nhân, {fullName} 👋</h2>
           <p style={{ color: GRAY_TEXT, marginTop: 4 }}>Trang tổng hợp hồ sơ bệnh án cá nhân, hóa đơn dịch vụ tích hợp dữ liệu On-chain tối mật.</p>
         </div>
-
 
         {/* Khối Thống Kê Tổng Hợp */}
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
@@ -578,7 +521,6 @@ export default function PatientDashboard() {
           })}
         </div>
 
-
         {/* Khối Giao Diện Chức Năng (Tabs Content) */}
         <div style={{ background: WHITE, borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.07)" }}>
           <div style={{ display: "flex", borderBottom: `1px solid ${BORDER}`, overflowX: "auto" }}>
@@ -592,13 +534,11 @@ export default function PatientDashboard() {
             ))}
           </div>
 
-
           <div style={{ padding: "24px" }}>
             {saveSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, fontWeight: 500 }}>✅ {saveSuccess}</div>}
             {error && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, fontWeight: 500 }}>❌ {error}</div>}
             {invoiceSuccess && <div style={{ background: "#E6F9F0", color: "#0F6E56", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, fontWeight: 500 }}>{invoiceSuccess}</div>}
             {invoiceError && <div style={{ background: "#FEF2F2", color: "#E24B4A", borderRadius: 8, padding: "10px 16px", marginBottom: 16, fontSize: 13, fontWeight: 500 }}>{invoiceError}</div>}
-
 
             {/* ===== TAB 1: THÔNG TIN LÝ LỊCH & LỊCH SỬ KHÁM ===== */}
             {tab === "info" && (
@@ -614,7 +554,7 @@ export default function PatientDashboard() {
                     <Field label="Địa chỉ cư trú hiện tại" value={patient?.address} />
                     <Field label="Mã hóa địa chỉ ví Web3 liên kết" value={patient?.walletAddress} />
                   </div>
-                 
+                  
                   <h4 style={{ color: PRIMARY }}>Hồ sơ trạng thái sức khỏe</h4>
                   <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 32 }}>
                     <Field label="Nhóm máu" value={patient?.nhomMau} />
@@ -623,7 +563,6 @@ export default function PatientDashboard() {
                     <Field label="Triệu chứng lâm sàng ghi nhận" value={patient?.trieuChungLamSang} />
                     <Field label="Ghi chú mở rộng" value={patient?.ghiChu} />
                   </div>
-
 
                   {/* Lịch Sử Ghi Nhận Phía MongoDB */}
                   <div id="medical-history-section" style={{ borderTop: `1px solid ${BORDER}`, paddingTop: "20px" }}>
@@ -669,11 +608,10 @@ export default function PatientDashboard() {
                                 }}>
                                   {/* 🌟 Logic chữ hiển thị lồng nhau */}
                                   {
-                                    record.status === "completed" ? "Đã hoàn thành" :
+                                    record.status === "completed" ? "Đã hoàn thành" : 
                                     record.status === "pending" ? "Chờ khám" : "Chờ tiếp đón"
                                   }
                                 </span>
-
 
                                 <span style={{ fontSize: 13, color: GRAY_TEXT, fontWeight: 500 }}>
                                   🗓️ Ngày: {record.appointmentDate || "—"}
@@ -704,7 +642,6 @@ export default function PatientDashboard() {
                     )}
                   </div>
 
-
                   {/* Bản Ghi Hồ Sơ Băm Khớp Xác Thực On-Chain */}
                   <div style={{ borderTop: `2px dashed ${BORDER}`, paddingTop: "24px", marginTop: "16px" }}>
                     <h4 style={{ color: "#16A34A", margin: "0 0 8px 0", display: "flex", alignItems: "center", gap: 8 }}>
@@ -713,7 +650,6 @@ export default function PatientDashboard() {
                     <p style={{ fontSize: 13, color: GRAY_TEXT, marginTop: 0, marginBottom: 16 }}>
                       Dữ liệu băm mật mã học (Record Hash) được trích xuất thời gian thực trực tiếp từ mạng phi tập trung Sepolia Testnet thông qua Smart Contract.
                     </p>
-
 
                     {loadingBlockchain ? (
                       <div style={{ fontSize: 13, color: "#16A34A", fontWeight: 500 }}>🔄 Đang truy quét dữ liệu phân đoạn khối Smart Contract...</div>
@@ -729,7 +665,6 @@ export default function PatientDashboard() {
                           <div><strong>Khóa tài khoản bệnh nhân (Patient Identity):</strong> <code style={{ background: "#F3F4F6", padding: "2px 6px", borderRadius: 4 }}>{blockchainData.patientAddress}</code></div>
                           <div><strong>Địa chỉ ví Oracle xử lý (Hospital Master Authority):</strong> <code style={{ background: "#F3F4F6", padding: "2px 6px", borderRadius: 4 }}>{blockchainData.hospitalAddress}</code></div>
                         </div>
-
 
                         <table style={{ width: "100%", borderCollapse: "collapse", fontSize: 13, marginTop: 8 }}>
                           <thead>
@@ -778,19 +713,18 @@ export default function PatientDashboard() {
               )
             )}
 
-
             {/* ===== TAB 2: ĐĂNG KÝ HẸN ĐẶT LỊCH KHÁM ===== */}
             {tab === "register" && (
               <div style={{ maxWidth: 600 }}>
                 <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>Đặt lịch khám bệnh trực tuyến liên kết cơ sở</h4>
                 <form onSubmit={handleBookAppointment}>
-                 
+                  
                   {/* 1. Chọn Bệnh Viện */}
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Cơ sở y tế mong muốn tiếp nhận <span style={{ color: 'red' }}>*</span></label>
-                    <select
-                      style={inputStyle}
-                      value={formAppointment.hospitalName}
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.hospitalName} 
                       onChange={e => setFormAppointment(p => ({ ...p, hospitalName: e.target.value }))}
                     >
                       <option value="">-- Click chọn cơ sở bệnh viện tương thích --</option>
@@ -814,13 +748,12 @@ export default function PatientDashboard() {
                     </select>
                   </div>
 
-
                   {/* 2. Chọn Chuyên Khoa Đầy Đủ */}
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Sắp xếp Chuyên khoa đăng ký <span style={{ color: 'red' }}>*</span></label>
-                    <select
-                      style={inputStyle}
-                      value={formAppointment.specialty}
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.specialty} 
                       onChange={e => setFormAppointment(p => ({ ...p, specialty: e.target.value }))}
                     >
                       <option value="">-- Chọn chuyên khoa khám --</option>
@@ -836,27 +769,25 @@ export default function PatientDashboard() {
                     </select>
                   </div>
 
-
                   {/* 3. Chọn Ngày Khám */}
                   <div style={{ marginBottom: 16, display: "flex", flexDirection: "column" }}>
                     <label style={labelStyle}>Thời gian ngày đặt lịch hẹn khám bệnh <span style={{ color: 'red' }}>*</span></label>
-                    <DatePicker
-                      style={{ ...inputStyle, display: "flex", alignItems: "center" }}
-                      locale={locale}
-                      format="DD/MM/YYYY"
-                      value={formAppointment.date}
-                      onChange={val => setFormAppointment(p => ({ ...p, date: val }))}
+                    <DatePicker 
+                      style={{ ...inputStyle, display: "flex", alignItems: "center" }} 
+                      locale={locale} 
+                      format="DD/MM/YYYY" 
+                      value={formAppointment.date} 
+                      onChange={val => setFormAppointment(p => ({ ...p, date: val }))} 
                       placeholder="Chọn ngày khám (DD/MM/YYYY)"
                     />
                   </div>
 
-
                   {/* 4. CHỌN CA KHÁM (GIẢI QUYẾT TRIỆT ĐỂ LỖI 400 BACKEND) */}
                   <div style={{ marginBottom: 16 }}>
                     <label style={labelStyle}>Ca khám mong muốn <span style={{ color: 'red' }}>*</span></label>
-                    <select
-                      style={inputStyle}
-                      value={formAppointment.caKham}
+                    <select 
+                      style={inputStyle} 
+                      value={formAppointment.caKham} 
                       onChange={e => setFormAppointment(p => ({ ...p, caKham: e.target.value }))}
                     >
                       <option value="">-- Chọn ca khám trong ngày --</option>
@@ -865,18 +796,16 @@ export default function PatientDashboard() {
                     </select>
                   </div>
 
-
                   {/* 5. Lý Do Khám */}
                   <div style={{ marginBottom: 24 }}>
                     <label style={labelStyle}>Triệu chứng lâm sàng sơ bộ / Lý do khám</label>
-                    <textarea
-                      style={{ ...inputStyle, height: 100, resize: "none" }}
-                      value={formAppointment.reason}
-                      onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))}
-                      placeholder="Mô tả chi tiết tình trạng sức khỏe hiện tại để bác sĩ tiện tiếp quản..."
+                    <textarea 
+                      style={{ ...inputStyle, height: 100, resize: "none" }} 
+                      value={formAppointment.reason} 
+                      onChange={e => setFormAppointment(p => ({ ...p, reason: e.target.value }))} 
+                      placeholder="Mô tả chi tiết tình trạng sức khỏe hiện tại để bác sĩ tiện tiếp quản..." 
                     />
                   </div>
-
 
                   <button type="submit" disabled={saving} style={{
                     background: PRIMARY, color: WHITE, border: "none", padding: "12px 24px",
@@ -887,7 +816,6 @@ export default function PatientDashboard() {
                 </form>
               </div>
             )}
-
 
             {/* ===== TAB 3: DANH SÁCH HÓA ĐƠN & VIỆN PHÍ ===== */}
             {tab === "invoice" && (
@@ -915,8 +843,8 @@ export default function PatientDashboard() {
                         {invoice.status === "paid" ? (
                           <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>✓ Đã thanh toán</span>
                         ) : (
-                          <button
-                            onClick={() => handlePayWithMetaMask(invoice)}
+                          <button 
+                            onClick={() => handlePayWithMetaMask(invoice)} 
                             disabled={payingId !== null}
                             style={{
                               background: payingId === invoice.invoiceId ? GRAY_TEXT : "#10B981", color: WHITE, border: "none",
@@ -932,7 +860,6 @@ export default function PatientDashboard() {
                 </div>
               )
             )}
-
 
             {/* ===== TAB 4: QUẢN LÝ PHÂN QUYỀN TRUY CẬP HỒ SƠ CỦA BÁC SĨ ===== */}
             {tab === "access" && (
@@ -955,8 +882,8 @@ export default function PatientDashboard() {
                         {req.status === "approved" ? (
                           <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>🛡️ Đã cấp quyền xem</span>
                         ) : (
-                          <button
-                            onClick={() => handleApproveRequest(req)}
+                          <button 
+                            onClick={() => handleApproveRequest(req)} 
                             disabled={approvingId !== null}
                             style={{
                               background: approvingId === req._id ? GRAY_TEXT : PRIMARY, color: WHITE, border: "none",
@@ -972,7 +899,6 @@ export default function PatientDashboard() {
                 </div>
               )
             )}
-
 
             {/* ===== TAB 5: CHỈNH SỬA LÝ LỊCH HÀNH CHÍNH ===== */}
             {tab === "edit" && (
@@ -1013,7 +939,6 @@ export default function PatientDashboard() {
                 </button>
               </div>
             )}
-
 
             {/* ===== TAB 6: CHỈNH SỬA TIỀN SỬ SỨC KHỎE THƯỜNG THỨC ===== */}
             {tab === "health" && (
