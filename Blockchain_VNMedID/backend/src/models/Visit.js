@@ -6,6 +6,8 @@ const visitSchema = new mongoose.Schema({
   diagnosis:        { type: String, default: "" },
   prescription:     { type: String, default: "" },
   ipfsHash:         { type: String, default: "" },
+  recordTxHash:     { type: String, default: "" },
+
   specialty:        { type: String, default: "" },
   appointmentDate:  { type: String, default: "" },
   trieuChungLamSang:{ type: String, default: "" },
@@ -25,7 +27,8 @@ const visitSchema = new mongoose.Schema({
     priceVND:  { type: Number, default: 0 },  // Giá lấy từ DAV
   }],
   totalVND: { type: Number, default: 0 },     // Tổng tiền VND tự tính
-  
+  recordTxHash: { type: String, default: "" }, // ✅ txHash ghi bệnh án lên Sepolia
+
 }, { timestamps: true });
 
 module.exports = mongoose.model('Visit', visitSchema);

@@ -338,6 +338,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
         ...(hospitalName      !== undefined && { hospitalName }),
         ...(isCompletingNow   && { ipfsHash }), // ✅ chỉ ghi ipfsHash khi vừa hoàn thành
         ...(isCompletingNow   && { ipfsHash }),
+        ...(recordTxHash       && { recordTxHash }), 
         ...(drugsWithPrice.length > 0 && { drugs: drugsWithPrice, totalVND }),
         
       },
@@ -383,7 +384,13 @@ const amountWei = ethers.parseEther(amountETH.toString());
 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
 await paymentTx.wait();
 
-console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${totalVND.toLocaleString('vi-VN')}đ | ${amountETH} ETH`);
+// ✅ Cập nhật txHash vào hóa đơn vừa tạo
+autoInvoice.txHash = paymentTx.hash;
+autoInvoice.amountInWei = amountWei.toString(); // ✅ lưu luôn amountInWei
+await autoInvoice.save();
+
+console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${totalVND.toLocaleString('vi-VN')}đ | ${amountETH} ETH | TxHash: ${paymentTx.hash}`);
+
 
         } else {
           console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
