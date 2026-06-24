@@ -44,6 +44,8 @@ export default function DoctorDashboard() {
   const [blockchainRecords, setBlockchainRecords] = useState([])
   const [loadingHistory, setLoadingHistory] = useState(false)
   const [expandedBlock, setExpandedBlock] = useState(null)
+  const [expandedCompletedRow, setExpandedCompletedRow] = useState(null)
+
 
   const [treatmentDays, setTreatmentDays] = useState(7)
   const [drugList, setDrugList] = useState([{ name: "", suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
@@ -52,6 +54,12 @@ export default function DoctorDashboard() {
 
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
+  const specialty = localStorage.getItem('chuyenKhoa')
+  fetch(`https://blockchain-vnmedid.onrender.com/api/v1/visits?status=completed&doctorId=${userId}`, {
+  headers: { Authorization: `Bearer ${token}` }
+  })
+  .then(r => r.json())
+  .then(d => console.log("KẾT QUẢ doctorId:", d))
 
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
@@ -64,9 +72,9 @@ export default function DoctorDashboard() {
           headers: { Authorization: `Bearer ${token}` },
           params: { specialty: specialtyName, date: formattedDate } 
         }),
-        axiosOriginal.get(`${BASE_URL}/visits`, {
+        axiosOriginal.get(`${BASE_URL}/visits/completed-doctor`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'completed', specialty: specialtyName, date: formattedDate }
+          params: { date: formattedDate }
         })
       ])
       
@@ -376,36 +384,92 @@ export default function DoctorDashboard() {
                   <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px", color: GRAY_TEXT }}>Đang đồng bộ dữ liệu...</td></tr>
                 ) : displayList.length === 0 ? (
                   <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px", color: GRAY_TEXT, fontStyle: "italic" }}>Không tìm thấy ca hẹn nào trong hệ thống.</td></tr>
-                ) : displayList.map((p, i) => (
-                  <tr key={p._id || i} style={{ borderBottom: `1px solid ${BORDER}`, background: "#fff" }}>
-                    <td style={{ padding: "14px 16px", fontWeight: 700, color: PRIMARY_MED }}>{i + 1}</td>
-                    <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0F172A" }}>{p.patientName || "---"}</td>
-                    <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13 }}>{p.specialty || "---"}</td>
-                    <td style={{ padding: "14px 16px", color: PRIMARY_MED, fontWeight: 600, fontSize: 13 }}>{p.appointmentDate || "---"}</td>
-                    <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13, maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{p.trieuChungLamSang || "Không có triệu chứng"}</td>
-                    <td style={{ padding: "14px 16px" }}>
-                      <span style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, fontWeight: 600, background: p.status === "completed" ? "#DEF7EC" : "#FEF3C7", color: p.status === "completed" ? "#03543F" : "#92400E" }}>
-                        {p.status === "completed" ? "Đã hoàn thành" : "Chờ vào khám"}
-                      </span>
-                    </td>
-                    <td style={{ padding: "14px 16px" }}>
-                      {p.status !== "completed" ? (
-                        <button onClick={() => { 
-                          setSelectedPatient(p); 
-                          setDiagnose('');
-                          setAccessStatus("none");
-                          setBlockchainRecords([]);
-                          setExpandedBlock(null);
-                          localStorage.setItem("current_exam_patient", JSON.stringify(p));
-                          localStorage.setItem("current_exam_access_status", "none");
-                        }}
-                          style={{ background: PRIMARY_MED, color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-                          Vào khám
-                        </button>
-                      ) : <span style={{ fontSize: 13, color: "#94A3B8", fontWeight: 500 }}>✓ Đã xử lý</span>}
-                    </td>
-                  </tr>
-                ))}
+               ) : displayList.map((p, i) => {
+  const isCompleted = p.status === "completed"
+  const isExpanded = expandedCompletedRow === (p._id || i)
+
+  return (
+    <Fragment key={p._id || i}>
+      <tr
+        style={{ borderBottom: `1px solid ${BORDER}`, background: isExpanded ? "#F0FDF4" : "#fff", cursor: isCompleted ? "pointer" : "default" }}
+        onClick={() => {
+          if (!isCompleted) return
+          setExpandedCompletedRow(isExpanded ? null : (p._id || i))
+        }}
+      >
+        <td style={{ padding: "14px 16px", fontWeight: 700, color: PRIMARY_MED }}>{i + 1}</td>
+        <td style={{ padding: "14px 16px", fontWeight: 600, color: "#0F172A" }}>{p.patientName || "---"}</td>
+        <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13 }}>{p.specialty || "---"}</td>
+        <td style={{ padding: "14px 16px", color: PRIMARY_MED, fontWeight: 600, fontSize: 13 }}>{p.appointmentDate || "---"}</td>
+        <td style={{ padding: "14px 16px", color: GRAY_TEXT, fontSize: 13, maxWidth: 250, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+          {p.trieuChungLamSang || "Không có triệu chứng"}
+        </td>
+        <td style={{ padding: "14px 16px" }}>
+          <span style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, fontWeight: 600, background: isCompleted ? "#DEF7EC" : "#FEF3C7", color: isCompleted ? "#03543F" : "#92400E" }}>
+            {isCompleted ? "Đã hoàn thành" : "Chờ vào khám"}
+          </span>
+        </td>
+        <td style={{ padding: "14px 16px" }}>
+          {!isCompleted ? (
+            <button onClick={(e) => {
+              e.stopPropagation()
+              setSelectedPatient(p)
+              setDiagnose('')
+              setAccessStatus("none")
+              setBlockchainRecords([])
+              setExpandedBlock(null)
+              localStorage.setItem("current_exam_patient", JSON.stringify(p))
+              localStorage.setItem("current_exam_access_status", "none")
+            }}
+              style={{ background: PRIMARY_MED, color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
+              Vào khám
+            </button>
+          ) : (
+            <button
+              onClick={(e) => {
+                e.stopPropagation()
+                setExpandedCompletedRow(isExpanded ? null : (p._id || i))
+              }}
+              style={{ background: isExpanded ? "#15803D" : "#10B981", color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}
+            >
+              {isExpanded ? "Đóng 📂" : "Xem lại 👁️"}
+            </button>
+          )}
+        </td>
+      </tr>
+
+      {isCompleted && isExpanded && (
+        <tr>
+          <td colSpan={7} style={{ padding: "16px 24px", background: "#F8FAFC", borderBottom: "1px solid #E2E8F0" }}>
+            <div style={{ background: "#fff", border: "1px solid #22C55E", borderRadius: 8, padding: 20, boxShadow: "0 2px 8px rgba(0,0,0,0.05)" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 16, paddingBottom: 12, borderBottom: "1px dashed #E2E8F0" }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: "#22C55E", textTransform: "uppercase" }}>✅ Kết quả ca khám đã ký số</span>
+                <span style={{ fontSize: 12, color: GRAY_TEXT }}>— {p.appointmentDate || "---"}</span>
+              </div>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12, marginBottom: 14, fontSize: 14 }}>
+                <div>🏥 <strong>Bệnh viện:</strong> {p.hospitalName || doctorInfo.hospitalName}</div>
+                <div>👨‍⚕️ <strong>Bác sĩ phụ trách:</strong> {p.doctorName || doctorInfo.fullName}</div>
+                <div>🧬 <strong>Chuyên khoa:</strong> {p.specialty || "---"}</div>
+                <div>🧑‍🤝‍🧑 <strong>Bệnh nhân:</strong> {p.patientName || "---"}</div>
+              </div>
+              <div style={{ marginBottom: 14, padding: "12px 14px", background: "#FEF2F2", borderRadius: 8, border: "1px solid #FECACA" }}>
+                🔬 <strong>Kết luận chẩn đoán:</strong>{" "}
+                <span style={{ color: "#EF4444", fontWeight: 600 }}>
+                  {p.chanDoanChuyenMon || "Chưa cập nhật"}
+                </span>
+              </div>
+              <div style={{ background: "#F1F5F9", padding: 14, borderRadius: 8, border: "1px solid #E2E8F0", whiteSpace: "pre-line", fontSize: 13, color: "#334155", lineHeight: 1.7 }}>
+                📋 <strong>Phác đồ điều trị & Đơn thuốc:</strong>{"\n"}
+                {p.huongDieuTri || "Không có thông tin đơn thuốc."}
+              </div>
+            </div>
+          </td>
+        </tr>
+      )}
+    </Fragment>
+  )
+})}
+
               </tbody>
             </table>
           </div>

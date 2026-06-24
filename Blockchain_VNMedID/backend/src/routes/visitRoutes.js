@@ -21,12 +21,28 @@ router.get(
   visitController.getMyAppointments
 );
 
-// ✅ THÊM: Bác sĩ xem danh sách hàng đợi thuộc riêng bệnh viện của mình
+// Bác sĩ xem danh sách hàng đợi
 router.get(
   '/pending-hospital',
   xacThucToken,
-  phanQuyen('doctor'), // Chỉ cho bác sĩ xem hàng chờ
+  phanQuyen('doctor'),
   visitController.getDoctorPendingVisits
+);
+
+// ✅ Bác sĩ xem lịch sử đã khám của mình
+router.get(
+  '/completed-doctor',
+  xacThucToken,
+  phanQuyen('doctor'),
+  visitController.getDoctorCompletedVisits
+);
+
+// Admin phân công bác sĩ vào lượt khám
+router.put(
+  '/assign/:visitId',
+  xacThucToken,
+  phanQuyen('admin'),
+  visitController.assignDoctor
 );
 
 // Admin/Doctor xem tất cả lượt khám
@@ -51,13 +67,6 @@ router.delete(
   xacThucToken,
   phanQuyen('doctor', 'admin'),
   visitController.deleteVisit
-);
-// Admin phân công bác sĩ vào lượt khám
-router.put(
-  '/assign/:visitId',
-  xacThucToken,
-  phanQuyen('admin'),
-  visitController.assignDoctor
 );
 
 module.exports = router;

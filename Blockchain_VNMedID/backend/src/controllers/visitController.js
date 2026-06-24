@@ -442,3 +442,55 @@ exports.assignDoctor = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
+// ─── BÁC SĨ XEM LỊCH SỬ ĐÃ KHÁM CỦA MÌNH ───────────────────────────────────
+exports.getDoctorCompletedVisits = async (req, res) => {
+  try {
+    const doctorId = req.user?.userId;
+    let { date } = req.query;
+
+    if (!doctorId) {
+      return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực!' });
+    }
+
+    let idConditions = [];
+    if (mongoose.Types.ObjectId.isValid(doctorId)) {
+      idConditions.push(new mongoose.Types.ObjectId(doctorId));
+    }
+    idConditions.push(doctorId);
+    idConditions.push(String(doctorId));
+
+    const filterQuery = {
+      doctorId: { $in: idConditions },
+      status: 'completed'
+    };
+
+    if (date && date.trim() !== "") {
+      try {
+        const parsedDate = new Date(date.trim());
+        if (!isNaN(parsedDate.getTime())) {
+          const year = parsedDate.getFullYear();
+          const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(parsedDate.getDate()).padStart(2, '0');
+          filterQuery.appointmentDate = `${year}-${month}-${day}`;
+        }
+      } catch (e) {}
+    }
+
+    const visits = await Visit.find(filterQuery)
+      .populate('shiftId', 'shift room date')
+      .sort({ createdAt: -1 });
+
+    return res.json({
+      success: true,
+      count: visits.length,
+      data: visits
+    });
+
+  } catch (error) {
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi hệ thống', 
+      error: error.message 
+    });
+  }
+};
