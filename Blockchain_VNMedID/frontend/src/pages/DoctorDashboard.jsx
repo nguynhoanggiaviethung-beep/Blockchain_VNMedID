@@ -56,20 +56,32 @@ export default function DoctorDashboard() {
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
       setLoading(true)
+      
+      const formattedDate = dateQuery ? dateQuery.trim() : "";
+
       const [pendingRes, completedRes] = await Promise.all([
         axiosOriginal.get(`${BASE_URL}/visits/pending-hospital`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'examining', specialty: specialtyName, date: dateQuery }
+          params: { specialty: specialtyName, date: formattedDate } 
         }),
         axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'completed', specialty: specialtyName, date: dateQuery }
+          params: { status: 'completed', specialty: specialtyName, date: formattedDate }
         })
       ])
-      setPatientList(pendingRes?.data?.data?.records || [])
-      setCompletedList(completedRes?.data?.data?.records || [])
+      
+      // 🌟 SỬA ĐOẠN BÓC TÁCH DATA NÀY CHO THẬT CHUẨN:
+      // Đảm bảo bóc đúng mảng 'data' từ Backend trả về (vì backend trả về { success: true, count: X, data: [...] })
+      const pendingData = pendingRes?.data?.data || [];
+      const completedData = completedRes?.data?.data || [];
+
+      // 🌟 QUAN TRỌNG NHẤT: Nếu là mảng thì gán, không thì bắt buộc phải đưa về mảng rỗng [] để xóa data cũ trên màn hình
+      setPatientList(Array.isArray(pendingData) ? pendingData : [])
+      setCompletedList(Array.isArray(completedData) ? completedData : [])
+
     } catch (error) {
       console.error("Lỗi lấy danh sách ca hẹn:", error)
+      // Nếu lỗi API, lập tức xóa sạch màn hình
       setPatientList([])
       setCompletedList([])
     } finally {
@@ -77,18 +89,18 @@ export default function DoctorDashboard() {
     }
   }, [token])
 
+  // Lấy thông tin Bác sĩ ban đầu
   useEffect(() => {
     if (!token || !userId) { navigate("/"); return }
 
-    const init = async () => {
-      let currentSpecialty = doctorInfo.specialty
+    const fetchDoctorInfo = async () => {
       try {
         const res = await axiosOriginal.get(`${BASE_URL}/doctors/${userId}`, {
           headers: { Authorization: `Bearer ${token}` }
         })
         if (res?.data?.success && res?.data?.data) {
           const d = res.data.data
-          currentSpecialty = d?.specialty || d?.["Chuyên Khoa"] || currentSpecialty
+          const currentSpecialty = d?.specialty || d?.["Chuyên Khoa"] || doctorInfo.specialty
           const hName = d?.hospitalName || d?.["Tên Bệnh viện"] || localStorage.getItem("hospitalName") || "Hệ thống Y tế số VNmedID"
           
           localStorage.setItem("hospitalName", hName)
@@ -100,12 +112,20 @@ export default function DoctorDashboard() {
             hospitalName: hName
           })
         }
-      } catch {}
-      await fetchPatients(currentSpecialty, selectedDate)
+      } catch (err) {
+        console.error("Lỗi lấy thông tin bác sĩ:", err)
+      }
     }
 
-    init()
-  }, [navigate, selectedDate, fetchPatients])
+    fetchDoctorInfo()
+  }, [navigate, token, userId])
+
+  // 🌟 TỰ ĐỘNG CHẠY LẠI: Cứ đổi ngày (selectedDate) hoặc Chuyên khoa là load dữ liệu mới chuẩn đét
+  useEffect(() => {
+    if (token && doctorInfo.specialty) {
+      fetchPatients(doctorInfo.specialty, selectedDate)
+    }
+  }, [selectedDate, doctorInfo.specialty, fetchPatients, token])
 
   // Tải danh sách bệnh án từ DB đóng vai trò là dữ liệu gốc của Blockchain Hash
   useEffect(() => {
@@ -299,9 +319,16 @@ export default function DoctorDashboard() {
 
         <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 20, marginBottom: 32 }}>
           {[
-            { id: "all", icon: "👥", label: "Tổng số ca tiếp nhận", value: loading ? "..." : patientList.length + completedList.length, color: PRIMARY_MED },
-            { id: "completed", icon: "✅", label: "Đã hoàn thành ký số", value: loading ? "..." : completedList.length, color: "#10B981" },
-            { id: "pending", icon: "⏳", label: "Đang chờ khám lâm sàng", value: loading ? "..." : patientList.length, color: "#F59E0B" },
+            { 
+              id: "all", 
+              icon: "👥", 
+              label: "Tổng số ca tiếp nhận", 
+              // Đảm bảo luôn ép kiểu số bằng toán tử || 0 trước khi cộng
+              value: loading ? "..." : ((patientList?.length || 0) + (completedList?.length || 0)), 
+              color: PRIMARY_MED 
+            },
+            { id: "completed", icon: "✅", label: "Đã hoàn thành ký số", value: loading ? "..." : (completedList?.length || 0), color: "#10B981" },
+            { id: "pending", icon: "⏳", label: "Đang chờ khám lâm sàng", value: loading ? "..." : (patientList?.length || 0), color: "#F59E0B" },
           ].map(card => {
             const isSelected = activeFilter === card.id
             return (

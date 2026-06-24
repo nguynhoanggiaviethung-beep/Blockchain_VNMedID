@@ -93,35 +93,59 @@ exports.bookAppointment = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
-// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
-// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH THEO ĐÚNG BỆNH VIỆN ──────────────────────
+
+// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH THEO NGÀY VÀ KHOA ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
-    const doctorHospital = req.user?.hospitalName; // Tên bệnh viện của bác sĩ đang đăng nhập
+    const doctorHospital = req.user?.hospitalName;
+    let { specialty, date } = req.query;
 
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    // 1. Ép kiểu ID để tìm kiếm chính xác trong DB
-    let idConditions = [ doctorId, String(doctorId) ];
+    let idConditions = [];
     if (mongoose.Types.ObjectId.isValid(doctorId)) {
       idConditions.push(new mongoose.Types.ObjectId(doctorId));
     }
+    idConditions.push(doctorId);
+    idConditions.push(String(doctorId));
 
-    // 2. Thiết lập Object bộ lọc: BẮT BUỘC KHỚP CẢ ID VÀ TÊN BỆNH VIỆN
     const filterQuery = {
       doctorId: { $in: idConditions },
       status: { $in: ["pending", "examining"] }
     };
 
-    // 🌟 THẮT CHẶT BẢO MẬT: Bắt buộc ca khám phải có hospitalName trùng khớp với bệnh viện của bác sĩ đang đăng nhập
     if (doctorHospital) {
-      filterQuery.hospitalName = doctorHospital; 
+      filterQuery.hospitalName = doctorHospital;
     }
 
-    // 3. Tiến hành tìm kiếm trong MongoDB
+    if (specialty) {
+      filterQuery.specialty = specialty;
+    }
+
+    // 🌟 CHUẨN HÓA NGÀY TUYỆT ĐỐI KHÔNG LO SAI ĐỊNH DẠNG TỪ FRONTEND
+    // 🌟 SỬA LẠI ĐOẠN NÀY CHO CHUẨN ĐÉTC
+    if (date && date.trim() !== "") {
+      try {
+        const parsedDate = new Date(date.trim());
+        // Kiểm tra xem chuỗi gửi lên có phải là ngày hợp lệ không
+        if (!isNaN(parsedDate.getTime())) {
+          const year = parsedDate.getFullYear();
+          const month = String(parsedDate.getMonth() + 1).padStart(2, '0');
+          const day = String(parsedDate.getDate()).padStart(2, '0');
+          
+          filterQuery.appointmentDate = `${year}-${month}-${day}`; // Luôn luôn ra dạng YYYY-MM-DD
+        } else {
+          // Nếu không parse được (chuỗi lỗi), giữ nguyên gốc
+          filterQuery.appointmentDate = date.trim();
+        }
+      } catch (e) {
+        filterQuery.appointmentDate = date.trim();
+      }
+    }
+
     const pendingVisits = await Visit.find(filterQuery)
       .populate('shiftId', 'shift room date') 
       .sort({ createdAt: 1 });
@@ -129,7 +153,7 @@ exports.getDoctorPendingVisits = async (req, res) => {
     return res.json({
       success: true,
       count: pendingVisits.length,
-      data: pendingVisits
+      data: pendingVisits // Trả về mảng trực tiếp
     });
 
   } catch (error) {
@@ -140,7 +164,6 @@ exports.getDoctorPendingVisits = async (req, res) => {
     });
   }
 };
-
 // ─── BỆNH NHÂN XEM LỊCH CỦA MÌNH ───────────────────────────────────────────
 exports.getMyAppointments = async (req, res) => {
   try {
