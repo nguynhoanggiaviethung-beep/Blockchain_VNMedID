@@ -69,7 +69,7 @@ export default function DoctorDashboard() {
       const [pendingRes, completedRes] = await Promise.all([
         axiosOriginal.get(`${BASE_URL}/visits/pending-hospital`, {
           headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'examining', specialty: specialtyName, date: dateQuery }
+          params: { specialty: specialtyName, date: dateQuery }
         }),
         axiosOriginal.get(`${BASE_URL}/visits`, {
           headers: { Authorization: `Bearer ${token}` },
