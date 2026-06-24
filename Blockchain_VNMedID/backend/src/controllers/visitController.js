@@ -1,6 +1,7 @@
 const Visit = require('../models/Visit');
 const Shift = require('../models/Shift');
 
+
 const Invoice = require('../models/Invoice');
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
@@ -9,6 +10,7 @@ const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs'); // ✅
 const axios = require('axios');
 const { wrapper } = require('axios-cookiejar-support');
 const { CookieJar } = require('tough-cookie');
+
 
 const getDrugPriceFromDAV = async (drugName) => {
   try {
@@ -32,6 +34,7 @@ const getDrugPriceFromDAV = async (drugName) => {
   }
 };
 
+
 // ─── BỆNH NHÂN ĐẶT LỊCH ────────────────────────────────────────────────────
 // ─── BỆNH NHÂN ĐẶT LỊCH (TỰ ĐỘNG GÁN BÁC SĨ) ──────────────────────────────
 exports.bookAppointment = async (req, res) => {
@@ -39,10 +42,11 @@ exports.bookAppointment = async (req, res) => {
     // Lưu ý: Yêu cầu Frontend gửi thêm trường 'shift' (morning hoặc afternoon)
     const { patientId, patientName, specialty, appointmentDate, shift, trieuChungLamSang, hospitalName } = req.body;
 
+
     if (!patientId || !specialty || !appointmentDate || !hospitalName || !shift) {
       return res.status(400).json({ success: false, message: 'Vui lòng chọn chuyên khoa, ngày khám, ca khám và bệnh viện!' });
     }
-  
+ 
     let DB_shift = shift;
     if (typeof shift === 'string') {
       if (shift.includes('Sáng') || shift.toLowerCase().includes('morning')) {
@@ -51,6 +55,7 @@ exports.bookAppointment = async (req, res) => {
         DB_shift = 'afternoon';
       }
     }
+
 
     // 1. TỰ ĐỘNG TÌM BÁC SĨ ĐANG TRỰC
     // Máy sẽ dò xem ngày hôm đó, ca đó, chuyên khoa đó có bác sĩ nào đang có lịch active không
@@ -61,12 +66,14 @@ exports.bookAppointment = async (req, res) => {
         status: 'active'
     });
 
+
     if (!activeShift) {
-        return res.status(404).json({ 
-            success: false, 
-            message: `Rất tiếc, không có bác sĩ chuyên khoa ${specialty} trực vào ca này ngày ${appointmentDate}. Vui lòng chọn khung giờ khác!` 
+        return res.status(404).json({
+            success: false,
+            message: `Rất tiếc, không có bác sĩ chuyên khoa ${specialty} trực vào ca này ngày ${appointmentDate}. Vui lòng chọn khung giờ khác!`
         });
     }
+
 
     // 2. GÁN LUÔN BÁC SĨ VÀO HỒ SƠ & LƯU LẠI
     const visit = new Visit({
@@ -81,13 +88,14 @@ exports.bookAppointment = async (req, res) => {
       shiftId: activeShift._id,             // 👈 Gắn chốt luôn vào ca trực đó
       status: "pending"                   // 👈 Đổi trạng thái bỏ qua bước pending của admin
     });
-    
+   
     await visit.save();
 
-    return res.status(201).json({ 
-        success: true, 
+
+    return res.status(201).json({
+        success: true,
         message: 'Đặt lịch và tự động phân công bác sĩ thành công!',
-        data: visit 
+        data: visit
     });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
@@ -100,9 +108,11 @@ exports.getDoctorPendingVisits = async (req, res) => {
     const doctorId = req.user?.userId;
     const doctorHospital = req.user?.hospitalName; // Tên bệnh viện của bác sĩ đang đăng nhập
 
+
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
+
 
     // 1. Ép kiểu ID để tìm kiếm chính xác trong DB
     let idConditions = [ doctorId, String(doctorId) ];
@@ -110,21 +120,25 @@ exports.getDoctorPendingVisits = async (req, res) => {
       idConditions.push(new mongoose.Types.ObjectId(doctorId));
     }
 
+
     // 2. Thiết lập Object bộ lọc: BẮT BUỘC KHỚP CẢ ID VÀ TÊN BỆNH VIỆN
     const filterQuery = {
       doctorId: { $in: idConditions },
       status: { $in: ["pending", "examining"] }
     };
 
+
     // 🌟 THẮT CHẶT BẢO MẬT: Bắt buộc ca khám phải có hospitalName trùng khớp với bệnh viện của bác sĩ đang đăng nhập
     if (doctorHospital) {
-      filterQuery.hospitalName = doctorHospital; 
+      filterQuery.hospitalName = doctorHospital;
     }
+
 
     // 3. Tiến hành tìm kiếm trong MongoDB
     const pendingVisits = await Visit.find(filterQuery)
-      .populate('shiftId', 'shift room date') 
+      .populate('shiftId', 'shift room date')
       .sort({ createdAt: 1 });
+
 
     return res.json({
       success: true,
@@ -132,37 +146,44 @@ exports.getDoctorPendingVisits = async (req, res) => {
       data: pendingVisits
     });
 
+
   } catch (error) {
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Lỗi hệ thống tại Controller', 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi hệ thống tại Controller',
+      error: error.message
     });
   }
 };
+
 
 // ─── BỆNH NHÂN XEM LỊCH CỦA MÌNH ───────────────────────────────────────────
 exports.getMyAppointments = async (req, res) => {
   try {
     const patientId = req.user?.patientId || req.query.patientId;
 
+
     if (!patientId) {
       return res.status(400).json({ success: false, message: 'Thiếu patientId!' });
     }
+
 
     let queryConditions = [
       { patientId: String(patientId) },
       { patientId: patientId }
     ];
 
+
     if (mongoose.Types.ObjectId.isValid(patientId)) {
       queryConditions.push({ patientId: new mongoose.Types.ObjectId(patientId) });
     }
+
 
     const visits = await Visit.find({ patientId: patientId })
       .populate('doctorId', 'fullName specialty')
       .populate('shiftId', 'shift room date')
       .sort({ createdAt: -1 });
+
 
     return res.json({ success: true, data: visits });
   } catch (error) {
@@ -170,14 +191,17 @@ exports.getMyAppointments = async (req, res) => {
   }
 };
 
+
 // ─── ADMIN: LẤY TẤT CẢ LƯỢT KHÁM ───────────────────────────────────────────
 exports.getAllVisits = async (req, res) => {
   try {
     const { status, date, search } = req.query;
     let filter = {};
 
+
     if (status) filter.status = status;
     if (date) filter.appointmentDate = date;
+
 
     if (search) {
       filter.$or = [
@@ -189,10 +213,12 @@ exports.getAllVisits = async (req, res) => {
       ];
     }
 
+
     const visits = await Visit.find(filter)
       .populate('doctorId', 'fullName specialty licenseNumber')
       .populate('shiftId', 'shift room date')
       .sort({ createdAt: -1 });
+
 
     return res.json({
       success: true,
@@ -202,6 +228,7 @@ exports.getAllVisits = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
+
 
 // ─── ADMIN/DOCTOR: CẬP NHẬT LƯỢT KHÁM ───────────────────────────────────────
 // ✅ Khi status chuyển thành "completed" → upload IPFS + ghi hash lên blockchain + tự sinh hóa đơn
@@ -215,16 +242,20 @@ exports.updateVisit = async (req, res) => {
 } = req.body;
 
 
+
+
     // Lấy visit gốc trước để biết trạng thái cũ và đủ context
     const existingVisit = await Visit.findById(id);
     if (!existingVisit) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
     }
 
+
     const isCompletingNow = status === 'completed' && existingVisit.status !== 'completed';
     // ✅ THÊM: Tra giá thuốc từ DAV
 let drugsWithPrice = existingVisit.drugs || [];
 let totalVND = existingVisit.totalVND || 0;
+
 
 if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length > 0) {
   drugsWithPrice = [];
@@ -240,9 +271,12 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
 }
 
 
+
+
     let ipfsHash = existingVisit.ipfsHash || "";
     let ipfsUrl = ipfsHash ? getIPFSGatewayUrl(ipfsHash) : "";
     let recordTxHash = null;
+
 
     // ========================================================
     // 📦 NẾU ĐANG HOÀN THÀNH CA KHÁM: Upload bệnh án lên IPFS + ghi hash lên blockchain
@@ -250,6 +284,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
     if (isCompletingNow) {
       const finalDiagnose = chanDoanChuyenMon || diagnosis || "";
       const finalPrescription = huongDieuTri || prescription || "";
+
 
       // Bước 1: Upload nội dung bệnh án đầy đủ lên IPFS (bất biến)
       try {
@@ -265,6 +300,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
           timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
         };
 
+
         ipfsHash = await uploadJSONToIPFS(recordPayload, `vnmedid-record-${id}`);
         ipfsUrl = getIPFSGatewayUrl(ipfsHash);
         console.log(`[IPFS] Đã upload bệnh án lên IPFS: ${ipfsUrl}`);
@@ -273,6 +309,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
         // Không chặn flow nếu IPFS lỗi
       }
 
+
       // Bước 2: Ghi hash (đại diện cho ipfsHash) lên Sepolia qua contract MedicalRecord
       try {
         const targetPatientKey = String(existingVisit.patientId);
@@ -280,7 +317,9 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
           ? JSON.stringify({ recordId: id, ipfsHash })
           : JSON.stringify({ recordId: id, diagnose: finalDiagnose, prescription: finalPrescription, doctorName });
 
+
         const recordHash = ethers.keccak256(ethers.toUtf8Bytes(hashSource));
+
 
         console.log(`[Blockchain] Đẩy hash bệnh án lên Key: ${targetPatientKey}`);
         const medicalContract = getContractInstance('medicalRecord');
@@ -296,6 +335,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
         console.error('Lỗi đồng bộ MedicalRecord blockchain:', bcError.message);
       }
     }
+
 
     // ========================================================
     // 💾 CẬP NHẬT VISIT TRONG MONGODB
@@ -316,14 +356,16 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
         ...(isCompletingNow   && { ipfsHash }), // ✅ chỉ ghi ipfsHash khi vừa hoàn thành
         ...(isCompletingNow   && { ipfsHash }),
         ...(drugsWithPrice.length > 0 && { drugs: drugsWithPrice, totalVND }),
-        
+       
       },
       { new: true }
     );
 
+
     if (!updated) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
     }
+
 
     // ========================================================
     // 💳 TỰ ĐỘNG SINH HÓA ĐƠN VIỆN PHÍ (chỉ khi vừa hoàn thành ca khám)
@@ -334,9 +376,11 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
         let patientObjectId;
         try { patientObjectId = new mongoose.Types.ObjectId(updated.patientId); } catch (_) {}
 
+
         const patientUser = await db.collection('users').findOne({
           $or: [{ _id: patientObjectId }, { _id: updated.patientId }]
         });
+
 
         if (patientUser && patientUser.walletAddress) {
           const generatedInvoiceId = "INV-" + Math.floor(10000000 + Math.random() * 90000000);
@@ -344,6 +388,7 @@ const ETH_RATE = 80_000_000;
 const amountETH = totalVND > 0
   ? parseFloat((totalVND / ETH_RATE).toFixed(6))
   : 0.001;
+
 
 const autoInvoice = new Invoice({
   invoiceId: generatedInvoiceId,
@@ -355,12 +400,15 @@ const autoInvoice = new Invoice({
 });
 await autoInvoice.save();
 
+
 const paymentContract = getContractInstance('payment');
 const amountWei = ethers.parseEther(amountETH.toString());
 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientUser.walletAddress, amountWei);
 await paymentTx.wait();
 
+
 console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${totalVND.toLocaleString('vi-VN')}đ | ${amountETH} ETH`);
+
 
         } else {
           console.warn("⚠️ Không tìm thấy địa chỉ ví bệnh nhân, bỏ qua bước sinh hóa đơn tự động.");
@@ -370,20 +418,24 @@ console.log(`[Tự động] Đã tạo hóa đơn: ${generatedInvoiceId} | ${tot
       }
     }
 
+
     return res.json({ success: true, data: updated, recordTxHash, ipfsHash, ipfsUrl });
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
 
+
 // ─── ADMIN/DOCTOR: XÓA LƯỢT KHÁM ────────────────────────────────────────────
 exports.deleteVisit = async (req, res) => {
   try {
     const deleted = await Visit.findByIdAndDelete(req.params.id);
 
+
     if (!deleted) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
     }
+
 
     return res.json({ success: true, message: 'Đã xóa lượt khám!' });
   } catch (error) {
@@ -396,13 +448,14 @@ exports.assignDoctor = async (req, res) => {
     const { visitId } = req.params;
     const { doctorId, doctorName, shiftId } = req.body;
 
+
     const updatedVisit = await Visit.findByIdAndUpdate(
       visitId,
-      { 
-        doctorId, 
-        doctorName, 
-        shiftId, 
-        status: "pending" 
+      {
+        doctorId,
+        doctorName,
+        shiftId,
+        status: "pending"
       },
       { new: true }
     )
@@ -410,9 +463,11 @@ exports.assignDoctor = async (req, res) => {
     .populate({ path: 'doctorId', select: { "Họ và tên": 1, "Chuyên Khoa": 1 } })
     .populate('shiftId', 'shift room date');
 
+
     if (!updatedVisit) {
       return res.status(404).json({ success: false, message: 'Không tìm thấy lượt khám!' });
     }
+
 
     return res.json({ success: true, message: 'Phân công thành công', data: updatedVisit });
   } catch (error) {
