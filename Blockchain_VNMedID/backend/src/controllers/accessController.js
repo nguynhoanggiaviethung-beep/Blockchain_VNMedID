@@ -201,3 +201,43 @@ exports.getActiveRequestsForDoctor = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
   }
 };
+// 6. BỆNH NHÂN CHỦ ĐỘNG THU HỒI QUYỀN
+exports.revokeAccessByPatient = async (req, res) => {
+  try {
+    const requestId = req.params.id || req.body.requestId;
+
+    const request = await AccessRequest.findById(requestId);
+    if (!request) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy yêu cầu truy cập!' });
+    }
+
+    if (request.status !== 'approved') {
+      return res.status(400).json({ success: false, message: 'Quyền này chưa được cấp hoặc đã bị thu hồi rồi!' });
+    }
+
+    // Gọi smart contract thu hồi on-chain
+    try {
+      const contract = getAccessContract();
+      const tx = await contract.revokeAccess(request.patientId, request.doctorWallet);
+      await tx.wait();
+      request.revokeTxHash = tx.hash;
+      console.log(`[Blockchain] Bệnh nhân thu hồi quyền thành công! TxHash: ${tx.hash}`);
+    } catch (bcErr) {
+      console.error('❌ Lỗi thu hồi on-chain:', bcErr.message);
+      // Không chặn flow — vẫn cập nhật DB dù on-chain lỗi
+    }
+
+    request.status = 'revoked';
+    request.revokedAt = new Date();
+    await request.save();
+
+    return res.json({ 
+      success: true, 
+      message: 'Đã thu hồi quyền truy cập thành công!',
+      data: { revokedAt: request.revokedAt }
+    });
+  } catch (err) {
+    console.error('❌ Lỗi thu hồi quyền:', err);
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống: ' + err.message });
+  }
+};

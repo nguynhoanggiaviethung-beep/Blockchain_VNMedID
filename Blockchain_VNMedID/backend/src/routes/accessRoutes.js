@@ -14,6 +14,8 @@ router.post('/requests/:id/approve', xacThucToken, phanQuyen('patient'), accessC
 
 // Frontend gọi từ chối POST /api/v1/access/requests/:id/reject
 router.post('/requests/:id/reject', xacThucToken, phanQuyen('patient'), accessController.rejectAccess);
+// Bệnh nhân chủ động thu hồi quyền PUT /api/v1/access/requests/:id/revoke
+router.put('/requests/:id/revoke', xacThucToken, phanQuyen('patient'), accessController.revokeAccessByPatient);
 
 // Frontend gọi lấy quyền bác sĩ GET /api/v1/access/requests/active-for-doctor
 router.get('/requests/active-for-doctor', xacThucToken, phanQuyen('doctor'), accessController.getActiveRequestsForDoctor);

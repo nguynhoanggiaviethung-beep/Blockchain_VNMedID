@@ -368,6 +368,34 @@ export default function PatientDashboard() {
   };
 
   const showSuccess = (msg) => { setSaveSuccess(msg); setTimeout(() => setSaveSuccess(""), 4000); };
+  // 6b. Bệnh nhân chủ động thu hồi quyền truy cập đã cấp
+const handleRevokeAccess = async (request) => {
+  if (!window.confirm(`Bạn có chắc muốn thu hồi quyền truy cập của BS. ${request.doctorName}?`)) return;
+  
+  setError("");
+  setSaveSuccess("");
+
+  try {
+    setApprovingId(request._id);
+
+    const res = await axios.put(
+      `${BASE_URL}/access/requests/${request._id}/revoke`,
+      {},
+      { headers }
+    );
+
+    if (res.data.success) {
+      showSuccess(`✅ Đã thu hồi quyền truy cập của BS. ${request.doctorName} thành công!`);
+      await loadAccessRequests();
+    } else {
+      setError(res.data.message || "Không thể thu hồi quyền!");
+    }
+  } catch (err) {
+    setError("Lỗi thu hồi quyền: " + (err.response?.data?.message || err.message));
+  } finally {
+    setApprovingId(null);
+  }
+};
 
   // 7. Lưu thay đổi dữ liệu cơ bản (MongoDB)
   const handleSaveBasic = async () => {
@@ -879,20 +907,50 @@ export default function PatientDashboard() {
                         <div><strong>Định danh ví Web3 Bác sĩ:</strong> <code style={{ background: "#E5E7EB", padding: "2px 6px", borderRadius: 4, fontSize: 12 }}>{req.doctorWallet}</code></div>
                       </div>
                       <div>
-                        {req.status === "approved" ? (
-                          <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>🛡️ Đã cấp quyền xem</span>
-                        ) : (
-                          <button 
-                            onClick={() => handleApproveRequest(req)} 
-                            disabled={approvingId !== null}
-                            style={{
-                              background: approvingId === req._id ? GRAY_TEXT : PRIMARY, color: WHITE, border: "none",
-                              padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13
-                            }}
-                          >
-                            {approvingId === req._id ? "✍️ Đang ký mật mã..." : "✍️ Ký số Duyệt quyền"}
-                          </button>
-                        )}
+                                    {req.status === "approved" ? (
+              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>
+                  🛡️ Đã cấp quyền xem
+                </span>
+                <span style={{ fontSize: 11, color: GRAY_TEXT }}>
+                  ⏰ Tự hết hạn: {req.expiresAt ? new Date(req.expiresAt).toLocaleString('vi-VN') : "---"}
+                </span>
+                <button
+                  onClick={() => handleRevokeAccess(req)}
+                  disabled={approvingId !== null}
+                  style={{
+                    background: approvingId === req._id ? GRAY_TEXT : "#EF4444",
+                    color: WHITE, border: "none", padding: "8px 16px",
+                    borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13
+                  }}
+                >
+                  {approvingId === req._id ? "⏳ Đang xử lý..." : "🚫 Thu hồi quyền"}
+                </button>
+              </div>
+            ) : req.status === "revoked" || req.status === "expired" ? (
+              <span style={{ background: "#FEE2E2", color: "#991B1B", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>
+                {req.status === "revoked" ? "🚫 Đã thu hồi" : "⏰ Đã hết hạn"}
+              </span>
+            ) : req.status === "rejected" ? (
+              <span style={{ background: "#F3F4F6", color: GRAY_TEXT, padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>
+                ❌ Đã từ chối
+              </span>
+            ) : (
+              <button
+                onClick={() => handleApproveRequest(req)}
+                disabled={approvingId !== null}
+                style={{
+                  background: approvingId === req._id ? GRAY_TEXT : PRIMARY, color: WHITE, border: "none",
+                  padding: "10px 20px", borderRadius: 8, fontWeight: 600, cursor: "pointer", fontSize: 13
+                }}
+              >
+                {approvingId === req._id ? "✍️ Đang ký mật mã..." : "✍️ Ký số Duyệt quyền"}
+              </button>
+            )}
+
+
+
+                        
                       </div>
                     </div>
                   ))}
