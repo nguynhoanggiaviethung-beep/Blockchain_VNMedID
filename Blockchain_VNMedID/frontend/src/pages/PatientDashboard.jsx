@@ -419,6 +419,7 @@ export default function PatientDashboard() {
         hospitalName: formAppointment.hospitalName,
         benhVien: formAppointment.hospitalName,
         trieuChungLamSang: formAppointment.reason, 
+        status: "pending",
         reason: formAppointment.reason,
         
         // Cung cấp trường ca khám giải quyết dứt điểm lỗi trong ảnh image_c66be3.png
@@ -590,6 +591,7 @@ export default function PatientDashboard() {
                         {historyList.filter(record => {
                           if (activeStatFilter === "luotKham") return record.status === "completed";
                           if (activeStatFilter === "choKham")  return record.status === "pending";
+                          if (activeStatFilter === "dangKham") return record.status === "examining";
                           if (activeStatFilter === "donThuoc") return record.huongDieuTri;
                           return true;
                         }).map((record, index, filteredArr) => (
@@ -599,11 +601,18 @@ export default function PatientDashboard() {
                               <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
                                 <span style={{
                                   fontSize: 12, padding: "2px 10px", borderRadius: 20, fontWeight: 600,
-                                  background: record.status === "completed" ? "#D1FAE5" : "#FEF3C7",
-                                  color: record.status === "completed" ? "#065F46" : "#D97706"
+                                  // 🌟 Logic màu sắc lồng nhau (Ternary operator)
+                                  // [lite: completed -> xanh lá] [lite: examining -> xanh dương] [lite: pending -> vàng]
+                                  background: record.status === "completed" ? "#D1FAE5" : (record.status === "examining" ? "#DBEAFE" : "#FEF3C7"),
+                                  color: record.status === "completed" ? "#065F46" : (record.status === "examining" ? "#1E40AF" : "#D97706")
                                 }}>
-                                  {record.status === "completed" ? "Đã khám" : "Chờ tiếp đón"}
+                                  {/* 🌟 Logic chữ hiển thị lồng nhau */}
+                                  {
+                                    record.status === "completed" ? "Đã hoàn thành" : 
+                                    record.status === "pending" ? "Chờ khám" : "Chờ tiếp đón"
+                                  }
                                 </span>
+
                                 <span style={{ fontSize: 13, color: GRAY_TEXT, fontWeight: 500 }}>
                                   🗓️ Ngày: {record.appointmentDate || "—"}
                                 </span>
@@ -666,15 +675,35 @@ export default function PatientDashboard() {
                             </tr>
                           </thead>
                           <tbody>
-                            {blockchainData.history.map((block, idx) => (
-                              <tr key={idx} style={{ borderBottom: "1px solid #E5E7EB" }}>
-                                <td style={{ padding: "10px 12px", fontWeight: 600 }}>#{idx + 1}</td>
-                                <td style={{ padding: "10px 12px", color: GRAY_TEXT }}>{block.timestamp}</td>
-                                <td style={{ padding: "10px 12px" }}>
-                                  <code style={{ color: "#16A34A", fontWeight: 500, wordBreak: "break-all" }}>{block.recordHash}</code>
+                            {blockchainData?.history && blockchainData.history.length > 0 ? (
+                              blockchainData.history.map((block, idx) => (
+                                <tr key={idx} style={{ borderBottom: "1px solid #E5E7EB" }}>
+                                  <td style={{ padding: "10px 12px", fontWeight: 600 }}>#{block.stt || idx + 1}</td>
+                                  {/* 🌟 ĐỔI THÀNH block.time như trong Network trả về */}
+                                  <td style={{ padding: "10px 12px", color: GRAY_TEXT }}>
+                                    {(() => {
+                                      if (!block.time) return "Chưa xác định";
+                                      try {
+                                        const dateObj = new Date(block.time);
+                                        return isNaN(dateObj.getTime()) ? block.time : dateObj.toLocaleString('vi-VN');
+                                      } catch {
+                                        return block.time;
+                                      }
+                                    })()}
+                                  </td>
+                                  <td style={{ padding: "10px 12px" }}>
+                                    {/* 🌟 ĐỔI THÀNH block.hash như trong Network trả về */}
+                                    <code style={{ color: "#16A34A", fontWeight: 500, wordBreak: "break-all" }}>{block.hash || block.recordHash}</code>
+                                  </td>
+                                </tr>
+                              ))
+                            ) : (
+                              <tr>
+                                <td colSpan="3" style={{ padding: "20px", textAlign: "center", color: GRAY_TEXT }}>
+                                  Chưa có lịch sử chứng thực on-chain nào.
                                 </td>
                               </tr>
-                            ))}
+                            )}
                           </tbody>
                         </table>
                       </div>

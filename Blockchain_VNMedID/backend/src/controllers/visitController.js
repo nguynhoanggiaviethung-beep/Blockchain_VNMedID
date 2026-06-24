@@ -93,37 +93,38 @@ exports.bookAppointment = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
-
-
-// ─── BÁC SĨ LẤY DANH SÁCH CHỜ THEO BỆNH VIỆN CÔNG TÁC ──────────────────────
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
-// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
+// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH THEO ĐÚNG BỆNH VIỆN ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
+    const doctorHospital = req.user?.hospitalName; // Tên bệnh viện của bác sĩ đang đăng nhập
+
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
 
-    let queryConditions = [
-      { doctorId: doctorId },
-      { doctorId: String(doctorId) }
-    ];
-
+    // 1. Ép kiểu ID để tìm kiếm chính xác trong DB
+    let idConditions = [ doctorId, String(doctorId) ];
     if (mongoose.Types.ObjectId.isValid(doctorId)) {
-      queryConditions.push({ doctorId: new mongoose.Types.ObjectId(doctorId) });
+      idConditions.push(new mongoose.Types.ObjectId(doctorId));
     }
 
-    // ✅ Đã xóa đoạn trùng lặp và sửa lỗi cú pháp hoàn chỉnh
-    const pendingVisits = await Visit.find({
-      $or: [
-        { doctorId: doctorId },       // Khớp nếu DB lưu dạng String
-        { doctorId: queryDoctorId }  // Khớp nếu DB lưu dạng ObjectId gốc từ bảng Shift
-      ],
-      status: "examining" 
-    })
-    .populate('shiftId', 'shift room date') 
-    .sort({ createdAt: 1 });
+    // 2. Thiết lập Object bộ lọc: BẮT BUỘC KHỚP CẢ ID VÀ TÊN BỆNH VIỆN
+    const filterQuery = {
+      doctorId: { $in: idConditions },
+      status: { $in: ["pending", "examining"] }
+    };
+
+    // 🌟 THẮT CHẶT BẢO MẬT: Bắt buộc ca khám phải có hospitalName trùng khớp với bệnh viện của bác sĩ đang đăng nhập
+    if (doctorHospital) {
+      filterQuery.hospitalName = doctorHospital; 
+    }
+
+    // 3. Tiến hành tìm kiếm trong MongoDB
+    const pendingVisits = await Visit.find(filterQuery)
+      .populate('shiftId', 'shift room date') 
+      .sort({ createdAt: 1 });
 
     return res.json({
       success: true,
@@ -132,17 +133,30 @@ exports.getDoctorPendingVisits = async (req, res) => {
     });
 
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi hệ thống tại Controller', 
+      error: error.message 
+    });
   }
 };
 
 // ─── BỆNH NHÂN XEM LỊCH CỦA MÌNH ───────────────────────────────────────────
 exports.getMyAppointments = async (req, res) => {
   try {
-    const patientId = req.user?.userId || req.query.patientId;
+    const patientId = req.user?.patientId || req.query.patientId;
 
     if (!patientId) {
       return res.status(400).json({ success: false, message: 'Thiếu patientId!' });
+    }
+
+    let queryConditions = [
+      { patientId: String(patientId) },
+      { patientId: patientId }
+    ];
+
+    if (mongoose.Types.ObjectId.isValid(patientId)) {
+      queryConditions.push({ patientId: new mongoose.Types.ObjectId(patientId) });
     }
 
     const visits = await Visit.find({ patientId: patientId })
@@ -248,7 +262,7 @@ if (prescribedDrugs && Array.isArray(prescribedDrugs) && prescribedDrugs.length 
           chanDoanChuyenMon: finalDiagnose,
           huongDieuTri: finalPrescription,
           doctorName: doctorName || "",
-          timestamp: new Date().toISOString(),
+          timestamp: new Date().toLocaleString("vi-VN", { timeZone: "Asia/Ho_Chi_Minh" }),
         };
 
         ipfsHash = await uploadJSONToIPFS(recordPayload, `vnmedid-record-${id}`);
@@ -388,7 +402,7 @@ exports.assignDoctor = async (req, res) => {
         doctorId, 
         doctorName, 
         shiftId, 
-        status: "examining" 
+        status: "pending" 
       },
       { new: true }
     )
