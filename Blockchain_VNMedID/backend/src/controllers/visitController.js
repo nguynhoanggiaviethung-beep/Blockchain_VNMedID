@@ -101,18 +101,16 @@ exports.bookAppointment = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
-// ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH ──────────────────────
+
 // ─── BÁC SĨ LẤY DANH SÁCH CHỜ CỦA RIÊNG MÌNH THEO ĐÚNG BỆNH VIỆN ──────────────────────
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
     const doctorHospital = req.user?.hospitalName; // Tên bệnh viện của bác sĩ đang đăng nhập
 
-
     if (!doctorId) {
       return res.status(401).json({ success: false, message: 'Không tìm thấy thông tin xác thực bác sĩ!' });
     }
-
 
     // 1. Ép kiểu ID để tìm kiếm chính xác trong DB
     let idConditions = [ doctorId, String(doctorId) ];
@@ -120,25 +118,21 @@ exports.getDoctorPendingVisits = async (req, res) => {
       idConditions.push(new mongoose.Types.ObjectId(doctorId));
     }
 
-
     // 2. Thiết lập Object bộ lọc: BẮT BUỘC KHỚP CẢ ID VÀ TÊN BỆNH VIỆN
     const filterQuery = {
       doctorId: { $in: idConditions },
       status: { $in: ["pending", "examining"] }
     };
 
-
     // 🌟 THẮT CHẶT BẢO MẬT: Bắt buộc ca khám phải có hospitalName trùng khớp với bệnh viện của bác sĩ đang đăng nhập
     if (doctorHospital) {
-      filterQuery.hospitalName = doctorHospital;
+      filterQuery.hospitalName = doctorHospital; 
     }
-
 
     // 3. Tiến hành tìm kiếm trong MongoDB
     const pendingVisits = await Visit.find(filterQuery)
-      .populate('shiftId', 'shift room date')
+      .populate('shiftId', 'shift room date') 
       .sort({ createdAt: 1 });
-
 
     return res.json({
       success: true,
@@ -146,12 +140,11 @@ exports.getDoctorPendingVisits = async (req, res) => {
       data: pendingVisits
     });
 
-
   } catch (error) {
-    return res.status(500).json({
-      success: false,
-      message: 'Lỗi hệ thống tại Controller',
-      error: error.message
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi hệ thống tại Controller', 
+      error: error.message 
     });
   }
 };
