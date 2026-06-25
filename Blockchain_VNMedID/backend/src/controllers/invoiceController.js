@@ -85,8 +85,9 @@ exports.makePayment = async (req, res) => {
       const paymentContract = getContractInstance('payment');
       
       // Lấy dữ liệu Struct: [patientWallet, amount, paid] tự Blockchain Sepolia
-      const onChainData = await paymentContract.getInvoice(invoiceId);
-      const isPaidOnChain = onChainData.paid || onChainData[2]; 
+     const onChainData = await paymentContract.invoices(invoiceId);
+     const isPaidOnChain = onChainData.paid || onChainData[2];
+
 
       if (!isPaidOnChain) {
         return res.status(400).json({ 
