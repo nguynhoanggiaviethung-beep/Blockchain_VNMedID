@@ -864,14 +864,14 @@ const handleRevokeAccess = async (request) => {
                         <div><strong>Nội dung thanh toán:</strong> {invoice.description || "Chi phí khám bệnh & cấp phát vật tư y tế"}</div>
                         <div><strong>Cơ sở bệnh viện ban hành:</strong> {invoice.hospitalName || "VNmedID Network"}</div>
                         <div><strong>Số tiền quy đổi viện phí:</strong> <span style={{ color: "#E24B4A", fontWeight: 700, fontSize: 16 }}>{invoice.amount} ETH</span></div>
-                        {invoice.status === "paid" && (
+                        {invoice.paymentStatus === "paid" && (
                           <div style={{ fontSize: 12, color: "#16A34A", wordBreak: "break-all", marginTop: 4 }}>
                             <strong>Mã băm hóa đơn (TxHash):</strong> {invoice.txHash || "Thanh toán nội bộ"}
                           </div>
                         )}
                       </div>
                       <div>
-                        {invoice.status === "paid" ? (
+                        {invoice.paymentStatus === "paid" ? (
                           <span style={{ background: "#D1FAE5", color: "#065F46", padding: "6px 16px", borderRadius: 8, fontWeight: 600, fontSize: 13 }}>✓ Đã thanh toán</span>
                         ) : (
                           <button 
