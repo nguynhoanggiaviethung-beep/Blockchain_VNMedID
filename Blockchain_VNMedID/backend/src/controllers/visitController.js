@@ -58,6 +58,7 @@ exports.bookAppointment = async (req, res) => {
         date: appointmentDate,
         shift: DB_shift,
         specialty: specialty,
+        hospitalName: hospitalName,
         status: 'active'
     });
 

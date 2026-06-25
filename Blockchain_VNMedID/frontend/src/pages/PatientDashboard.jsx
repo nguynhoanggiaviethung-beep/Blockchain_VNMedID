@@ -760,22 +760,17 @@ const handleRevokeAccess = async (request) => {
                     >
                       <option value="">-- Click chọn cơ sở bệnh viện tương thích --</option>
                       {hospitals && hospitals.length > 0 ? (
-                        hospitals.map((h, idx) => {
-                          const nameStr = h.name || h.hospitalName || h.tenBenhVien || (typeof h === 'string' ? h : "");
-                          if (!nameStr) return null;
-                          return (
-                            <option key={h._id || idx} value={nameStr}>
-                              {nameStr}
-                            </option>
-                          );
-                        })
-                      ) : (
-                        HOSPITALS.map((hospital, idx) => (
-                          <option key={idx} value={hospital}>
-                            {hospital}
-                          </option>
-                        ))
-                      )}
+  hospitals.map((h, idx) => {
+    const nameStr = typeof h === 'string' ? h : (h.hospitalName || h.name || '');
+    if (!nameStr) return null;
+    return <option key={idx} value={nameStr}>{nameStr}</option>;
+  })
+) : (
+  HOSPITALS.map((hospital, idx) => (
+    <option key={idx} value={hospital}>{hospital}</option>
+  ))
+)}
+
                     </select>
                   </div>
 
@@ -822,8 +817,8 @@ const handleRevokeAccess = async (request) => {
                       onChange={e => setFormAppointment(p => ({ ...p, caKham: e.target.value }))}
                     >
                       <option value="">-- Chọn ca khám trong ngày --</option>
-                      <option value="Sáng">Ca Sáng (07:30 - 11:30)</option>
-                      <option value="Chiều">Ca Chiều (13:30 - 17:00)</option>
+                      <option value="morning">Ca Sáng (07:30 - 11:30)</option>
+                      <option value="afternoon">Ca Chiều (13:30 - 17:00)</option>
                     </select>
                   </div>
 

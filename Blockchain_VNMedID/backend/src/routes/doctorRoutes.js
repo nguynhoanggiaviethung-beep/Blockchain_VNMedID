@@ -24,7 +24,7 @@ router.get(
 
       return res.json({
         success: true,
-        data: hospitals
+        hospitals: hospitals
       });
     } catch (error) {
       return res.status(500).json({ success: false, message: error.message });
