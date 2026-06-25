@@ -138,28 +138,39 @@ export default function AdminSchedule() {
     fetchDoctors(); 
   }, [])
 
-  const handleTriggerAutoSchedule = async () => {
-    if (!window.confirm("Bạn có muốn hệ thống tự động phân lịch cố định không?")) return;
+ const handleTriggerAutoSchedule = async () => {
+    // Bước 1: Hỏi Admin muốn phân ca cho khoa nào
+    const inputSpecialty = window.prompt("Nhập Chuyên khoa bạn muốn tự động xếp lịch (Ví dụ: Nội khoa, Răng Hàm Mặt...):", "Nội khoa");
+    if (!inputSpecialty) return; // Hủy nếu Admin không nhập
+
+    // Bước 2: Hỏi ngày bắt đầu, gán sẵn ngày hôm nay cho tiện
+    const inputStartDate = window.prompt("Nhập ngày bắt đầu chạy lịch (Định dạng YYYY-MM-DD):", formattedToday);
+    if (!inputStartDate) return;
+
+    // Bước 3: Xác nhận lần cuối
+    if (!window.confirm(`⚡ Xác nhận tự động phân ca cho bác sĩ khoa [${inputSpecialty}] bắt đầu từ ngày [${inputStartDate}]?`)) return;
+
     setLoading(true);
     try {
       const response = await axios.post(`${BASE_URL}/shifts/auto-schedule`, {
-        specialty: "Răng Hàm Mặt",
-        doctorsCount: 10,
-        shiftsPerMonth: 26
+        specialty: inputSpecialty,
+        startDate: inputStartDate,
+        weeks: 4 // Phân ca xoay vòng trong 4 tuần như code backend của bạn
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
-        alert("Kích hoạt phân ca khám tự động thành công!");
-        fetchSchedules();
+        alert(response.data.message || "🎉 Kích hoạt phân ca khám tự động thành công!");
+        fetchSchedules(); // Reset lại bảng dữ liệu
       }
     } catch (err) {
-      alert("Lỗi kích hoạt xếp lịch: " + (err.response?.data?.message || err.message));
+      alert("❌ Lỗi kích hoạt xếp lịch: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
+  
 
   const handleCreate = async () => {
     if (!createForm.doctorId || !createForm.date) {
