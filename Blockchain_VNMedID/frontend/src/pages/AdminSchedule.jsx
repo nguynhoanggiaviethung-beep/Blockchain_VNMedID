@@ -11,7 +11,8 @@ const SUCCESS = "#16A34A"
 const SUCCESS_LIGHT = "#DCFCE7"
 const WARNING = "#D97706"
 const WARNING_LIGHT = "#FEF3C7"
-const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1"
+const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1"
+
 
 const SHIFT_MAP = {
   morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,    bg: WARNING_LIGHT },
@@ -57,6 +58,9 @@ export default function AdminSchedule() {
   const [filterDate, setFilterDate] = useState(formattedToday)
   const [filterShift, setFilterShift] = useState("")
   const [viewMode, setViewMode] = useState("table") 
+  // Modal Tự động xếp lịch (Giao diện xịn)
+  const [showAuto, setShowAuto] = useState(false);
+  const [autoForm, setAutoForm] = useState({ specialty: "", startDate: formattedToday });
 
   // Modal tạo mới
   const [showCreate, setShowCreate] = useState(false)
@@ -138,39 +142,34 @@ export default function AdminSchedule() {
     fetchDoctors(); 
   }, [])
 
- const handleTriggerAutoSchedule = async () => {
-    // Bước 1: Hỏi Admin muốn phân ca cho khoa nào
-    const inputSpecialty = window.prompt("Nhập Chuyên khoa bạn muốn tự động xếp lịch (Ví dụ: Nội khoa, Răng Hàm Mặt...):", "Nội khoa");
-    if (!inputSpecialty) return; // Hủy nếu Admin không nhập
+ // Lấy ra danh sách các chuyên khoa không trùng lặp từ data bác sĩ
+  const uniqueSpecialties = [...new Set(doctors.map(d => d.specialty || d["Chuyên khoa"]).filter(Boolean))];
 
-    // Bước 2: Hỏi ngày bắt đầu, gán sẵn ngày hôm nay cho tiện
-    const inputStartDate = window.prompt("Nhập ngày bắt đầu chạy lịch (Định dạng YYYY-MM-DD):", formattedToday);
-    if (!inputStartDate) return;
-
-    // Bước 3: Xác nhận lần cuối
-    if (!window.confirm(`⚡ Xác nhận tự động phân ca cho bác sĩ khoa [${inputSpecialty}] bắt đầu từ ngày [${inputStartDate}]?`)) return;
-
+  const handleConfirmAutoSchedule = async () => {
+    if (!autoForm.specialty) return alert("Vui lòng chọn chuyên khoa!");
+    
     setLoading(true);
     try {
       const response = await axios.post(`${BASE_URL}/shifts/auto-schedule`, {
-        specialty: inputSpecialty,
-        startDate: inputStartDate,
-        weeks: 4 // Phân ca xoay vòng trong 4 tuần như code backend của bạn
+        specialty: autoForm.specialty,
+        startDate: autoForm.startDate,
+        weeks: 4
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
       
       if (response.data.success) {
-        alert(response.data.message || "🎉 Kích hoạt phân ca khám tự động thành công!");
-        fetchSchedules(); // Reset lại bảng dữ liệu
+        alert("🎉 Kích hoạt phân ca khám tự động thành công!");
+        setShowAuto(false);
+        fetchSchedules();
       }
     } catch (err) {
-      alert("❌ Lỗi kích hoạt xếp lịch: " + (err.response?.data?.message || err.message));
+      alert("Lỗi kích hoạt xếp lịch: " + (err.response?.data?.message || err.message));
     } finally {
       setLoading(false);
     }
   };
-  
+
 
   const handleCreate = async () => {
     if (!createForm.doctorId || !createForm.date) {
@@ -394,7 +393,10 @@ export default function AdminSchedule() {
           <p style={{ color: GRAY_TEXT, marginTop: 4, fontSize: 14 }}>Phân công bác sĩ theo ca và ngày trực</p>
         </div>
         <div style={{ display: "flex", gap: 10 }}>
-          <button onClick={handleTriggerAutoSchedule}
+          <button onClick={() => {
+              if (uniqueSpecialties.length > 0) setAutoForm({...autoForm, specialty: uniqueSpecialties[0]})
+              setShowAuto(true)
+            }}
             style={{ background: "#16A34A", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ⚡ Tự động xếp lịch
           </button>
@@ -578,18 +580,48 @@ export default function AdminSchedule() {
       )}
 
       {/* Modal Xác nhận Xóa */}
-      {confirmDelete && (
+      {/* Modal Tự động xếp lịch UI */}
+      {showAuto && (
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
-          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 400, textAlign: "center" }}>
-            <h3>Xác nhận xóa lịch</h3>
-            <p>Xóa lịch trực này? Hành động không thể hoàn tác.</p>
-            <div style={{ display: "flex", gap: 10, justifyContent: "center", marginTop: 24 }}>
-              <button onClick={() => setConfirmDelete(null)} style={{ padding: "9px 24px", borderRadius: 8 }}>Hủy</button>
-              <button onClick={() => handleDelete(confirmDelete._id)} style={{ padding: "9px 24px", borderRadius: 8, background: ERROR, color: "#fff" }}>🗑 Xóa</button>
+          <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 450 }}>
+            <h3 style={{ color: PRIMARY, marginTop: 0 }}>⚡ Tự động phân ca</h3>
+            <p style={{ color: GRAY_TEXT, fontSize: 14, marginBottom: 20 }}>Hệ thống sẽ tự động xoay vòng lịch trực cho các bác sĩ trong chuyên khoa được chọn.</p>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div>
+                <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Chọn Chuyên khoa <span style={{ color: ERROR }}>*</span></label>
+                <select 
+                  value={autoForm.specialty} 
+                  onChange={e => setAutoForm({ ...autoForm, specialty: e.target.value })} 
+                  style={inputStyle}
+                >
+                  {uniqueSpecialties.length === 0 && <option value="">Không có dữ liệu chuyên khoa</option>}
+                  {uniqueSpecialties.map(spec => (
+                    <option key={spec} value={spec}>{spec}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div>
+                <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ngày bắt đầu chạy lịch <span style={{ color: ERROR }}>*</span></label>
+                <input 
+                  type="date" 
+                  value={autoForm.startDate} 
+                  onChange={e => setAutoForm({ ...autoForm, startDate: e.target.value })} 
+                  style={inputStyle} 
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
+              <button onClick={() => setShowAuto(false)} style={{ padding: "9px 20px", borderRadius: 8, border: `1px solid ${BORDER}`, background: "#fff", cursor: "pointer", fontWeight: 600 }}>Hủy</button>
+              <button onClick={handleConfirmAutoSchedule} disabled={loading} style={{ padding: "9px 24px", borderRadius: 8, background: "#16A34A", color: "#fff", border: "none", cursor: "pointer", fontWeight: 600 }}>
+                {loading ? "Đang xử lý..." : "🚀 Bắt đầu xếp lịch"}
+              </button>
             </div>
           </div>
         </div>
       )}
-    </div>
-  )
+      </div>
+  );
 }
