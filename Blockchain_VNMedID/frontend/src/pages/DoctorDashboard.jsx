@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { useNavigate } from 'react-router-dom'
 import axiosOriginal from 'axios'
+import DrugList from './DrugList'
 
 const PRIMARY = "#0A2D6E"
 const PRIMARY_MED = "#1A4FA8"
@@ -9,7 +10,7 @@ const GRAY_TEXT = "#4A5568"
 const BORDER = "#CBD5E1"
 const BG_GLOBAL = "#F8FAFC"
 
-const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1"
+const BASE_URL = "http://localhost:5000/api/v1"
 
 export default function DoctorDashboard() {
   const navigate = useNavigate()
@@ -48,13 +49,13 @@ export default function DoctorDashboard() {
 
 
   const [treatmentDays, setTreatmentDays] = useState(7)
-  const [drugList, setDrugList] = useState([{ name: "", suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
+  const [drugList, setDrugList] = useState([{ name: "", price: 0, suggestions: [], qty: 1, timesPerDay: 1, meals: [], note: "" }])
   const [doctorNote, setDoctorNote] = useState("")
-  const [drugSearchTimers, setDrugSearchTimers] = useState({})
+ 
 
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
-  const specialty = localStorage.getItem('chuyenKhoa')
+
   fetch(`https://blockchain-vnmedid.onrender.com/api/v1/visits?status=completed&doctorId=${userId}`, {
   headers: { Authorization: `Bearer ${token}` }
   })
@@ -215,25 +216,10 @@ export default function DoctorDashboard() {
     }
   }
 
-  const searchDrug = async (index, keyword) => {
-    const updated = [...drugList]
-    updated[index].name = keyword
-    setDrugList([...updated])
-    if (keyword.length < 2) { updated[index].suggestions = []; setDrugList([...updated]); return }
-    clearTimeout(drugSearchTimers[index])
-    const timer = setTimeout(async () => {
-      try {
-        const res = await fetch(`${BASE_URL}/drugs/search?q=${encodeURIComponent(keyword)}`)
-        const data = await res.json()
-        const next = [...drugList]
-        next[index].suggestions = Array.isArray(data) ? data.slice(0, 6) : []
-        setDrugList([...next])
-      } catch {}
-    }, 400)
-    setDrugSearchTimers(prev => ({ ...prev, [index]: timer }))
-  }
+
 
   const updateDrug = (index, field, value) => {
+    console.log(field, value)
     const updated = [...drugList]; updated[index][field] = value; setDrugList([...updated])
   }
 
@@ -273,7 +259,8 @@ export default function DoctorDashboard() {
           huongDieuTri: prescriptionText,
           doctorName: doctorInfo.fullName,
           doctorId: userId,
-          hospitalName: doctorInfo.hospitalName
+          hospitalName: doctorInfo.hospitalName,
+          prescribedDrugs: drugList
         },
         { headers: { Authorization: `Bearer ${token}` } }
       )
@@ -283,7 +270,7 @@ export default function DoctorDashboard() {
         resetForm()
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
-    } catch (error) {
+    } catch  {
       alert("Lỗi lưu trữ dữ liệu bệnh án.")
     } finally {
       setSubmitting(false)
@@ -632,18 +619,9 @@ export default function DoctorDashboard() {
                         {drugList.length > 1 && <button onClick={() => removeDrug(index)} style={{ background: "none", border: "none", color: "#EF4444", cursor: "pointer", fontSize: 14, fontWeight: 600 }}>Xóa mục này ✕</button>}
                       </div>
 
-                      <div style={{ position: "relative", marginBottom: 14 }}>
-                        <input value={drug.name} onChange={e => searchDrug(index, e.target.value)} placeholder="Nhập tên thuốc để tra cứu gợi ý..." style={{ width: "100%", padding: "10px 14px", borderRadius: 8, border: `1px solid ${BORDER}`, boxSizing: "border-box" }} />
-                        {drug.suggestions.length > 0 && (
-                          <div style={{ position: "absolute", top: "100%", left: 0, right: 0, background: "#fff", border: `1px solid ${BORDER}`, borderRadius: 8, zIndex: 100, maxHeight: 180, overflowY: "auto" }}>
-                            {drug.suggestions.map((s, si) => (
-                              <div key={si} onClick={() => { updateDrug(index, "name", s); updateDrug(index, "suggestions", []) }} style={{ padding: "10px 14px", cursor: "pointer", fontSize: 13, borderBottom: "1px solid #F1F5F9" }}>
-                                💊 <strong>{s}</strong>
-                              </div>
-                            ))}
-                          </div>
-                        )}
-                      </div>
+                      <DrugList drug={drug} index={index} updateDrug={updateDrug} />
+
+                      
 
                       <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 14 }}>
                         <div>

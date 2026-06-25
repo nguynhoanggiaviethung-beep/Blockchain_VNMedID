@@ -19,16 +19,14 @@ exports.getGovData = async (req, res) => {
           "User-Agent":
             "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/149 Safari/537.36",
         },
-      })
+      }),
     );
 
     // 1. Lấy Session + Cookie
     await client.get("https://dichvucong.dav.gov.vn/congbogiathuoc");
 
     // 2. Lấy XSRF Token
-    const cookies = await jar.getCookies(
-      "https://dichvucong.dav.gov.vn"
-    );
+    const cookies = await jar.getCookies("https://dichvucong.dav.gov.vn");
 
     const xsrf = cookies.find((c) => c.key === "XSRF-TOKEN")?.value;
 
@@ -58,7 +56,7 @@ exports.getGovData = async (req, res) => {
           Origin: "https://dichvucong.dav.gov.vn",
           Referer: "https://dichvucong.dav.gov.vn/congbogiathuoc",
         },
-      }
+      },
     );
 
     return res.status(200).json({
@@ -69,9 +67,9 @@ exports.getGovData = async (req, res) => {
         pageSize,
         total: data.result.totalCount,
         totalPages: Math.ceil(data.result.totalCount / pageSize),
-        items: data.result.items.map(item => ({
-            tenThuoc: item.tenThuoc,
-            giaBanBuonDuKien: item.giaBanBuonDuKien
+        items: data.result.items.map((item) => ({
+          tenThuoc: `${item.tenThuoc} - ${item.hoatChat}`,
+          giaBanBuonDuKien: item.giaBanBuonDuKien,
         })),
       },
     });
