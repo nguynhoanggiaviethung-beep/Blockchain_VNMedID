@@ -3,11 +3,8 @@ const router = express.Router();
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
 const { createInvoice, makePayment, getMyInvoices, getInvoiceById } = require('../controllers/invoiceController')
 router.get('/my', xacThucToken, phanQuyen('patient'), getMyInvoices);
-router.get('/:id', xacThucToken, phanQuyen('patient', 'admin'), getInvoiceById);
-// Tạo hóa đơn — chỉ Admin
+router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment); // ← LÊN TRƯỚC
 router.post('/', xacThucToken, phanQuyen('admin'), createInvoice);
-
-// Thanh toán — Patient
-router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment);
+router.get('/:id', xacThucToken, phanQuyen('patient', 'admin'), getInvoiceById); // ← XUỐNG SAU
 
 module.exports = router;

@@ -23,9 +23,10 @@ exports.createInvoice = async (req, res) => {
 
     // 🛑 BƯỚC KHÓA: Phải đẩy lên Blockchain THÀNH CÔNG trước khi lưu Database
     let txHash = null;
+    let amountWei = null;
     try {
       const paymentContract = getContractInstance('payment');
-      const amountWei = ethers.parseEther(amount.toString());
+      amountWei = ethers.parseEther(amount.toString());
       
       // Gọi Smart Contract để tạo hóa đơn On-chain
       const tx = await paymentContract.createInvoice(invoiceId, patientWallet, amountWei);
@@ -44,6 +45,7 @@ exports.createInvoice = async (req, res) => {
     const invoice = new Invoice({ 
       invoiceId, 
       amount, 
+      amountInWei: amountWei.toString(),
       patientWallet, 
       paymentStatus: 'pending',
       items: items || [],

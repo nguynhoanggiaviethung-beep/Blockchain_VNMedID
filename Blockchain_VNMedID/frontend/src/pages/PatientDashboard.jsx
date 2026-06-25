@@ -67,7 +67,7 @@ export default function PatientDashboard() {
   // State và cấu hình API đặt bên trong Component theo chuẩn React Hook
   const [hospitals, setHospitals] = useState([]);
   const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1";
-  const PAYMENT_CONTRACT_ADDRESS = "0xdE36843aa11C06EAfA9f1fca0d463351A87e4BbF";
+  const PAYMENT_CONTRACT_ADDRESS = "0x1bBBa8DCC7f01C43DA82b4935BD93a80EA1f6Ef6";
 
   // State quản lý dữ liệu Bệnh nhân
   const [patient, setPatient] = useState(null);
@@ -234,10 +234,13 @@ export default function PatientDashboard() {
         return;
       }
 
-      const amountWei = BigInt(invoice.amountInWei || Math.round(invoice.amount * 1e18));
+      const amountWei = invoice.amountInWei 
+        ? BigInt(invoice.amountInWei) 
+        : BigInt(Math.round(invoice.amount * 1e18));
+
       const amountHex = "0x" + amountWei.toString(16);
 
-      const selector = "7c9495b2"; 
+      const selector = "7c9495b2"; // ← thay bằng kết quả thực
       const strBytes = Array.from(new TextEncoder().encode(invoice.invoiceId));
       const strHex = strBytes.map(b => b.toString(16).padStart(2, "0")).join("");
       
