@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import axios from "axios";
+import { ethers } from "ethers";
 import logo from "../assets/logoVNMedID.png";
 import RegisterPatientForm from "./RegisterPatientForm";
 import { mapBackendToFrontend } from '../utils/doctorMapper.js';
