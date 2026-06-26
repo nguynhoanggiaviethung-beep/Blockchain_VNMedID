@@ -334,47 +334,91 @@ const Login = () => {
     const errs = validate();
     if (Object.keys(errs).length) { setErrors(errs); return; }
     setErrors({}); setLoading(true);
+    
     try {
       const roleMap = { "Bệnh nhân": "patient", "Bác sĩ": "doctor", "Admin": "admin" };
-      const response = await api.post("/auth/login", { email, password, role: roleMap[role] });
+      const currentRole = roleMap[role];
+      
+      // 1. Gửi Email + Password lên Back-end để xác thực danh tính Web2
+      const response = await api.post("/auth/login", { email, password, role: currentRole });
       const loginData = response.data?.data || response.data;
       const token = loginData?.token;
       const userRole = loginData?.role;
+      const walletAddressFromDB = loginData?.walletAddress; // Địa chỉ ví được gán với tài khoản này trong DB
+      
       if (!token) throw new Error("Không nhận được mã xác thực (Token) từ hệ thống!");
+
+      // 2. 🛡️ BẢO VỆ CA TRỰC: Nếu tài khoản đã được liên kết ví, bắt buộc phải đối chiếu chéo với MetaMask
+      if (walletAddressFromDB) {
+        if (!window.ethereum) {
+          throw new Error("Hệ thống yêu cầu MetaMask! Vui lòng cài đặt tiện ích mở rộng MetaMask trên trình duyệt.");
+        }
+
+        // Gọi MetaMask dậy và lấy ví đang active thực tế trên máy tính
+        const accounts = await window.ethereum.request({ method: "eth_requestAccounts" });
+        const currentMetamaskAddress = accounts[0].toLowerCase();
+
+        // Kiểm tra xem ví trên MetaMask có khớp với ví của tài khoản vừa đăng nhập không
+        if (currentMetamaskAddress !== walletAddressFromDB.toLowerCase()) {
+          throw new Error(`🛑 SAI TÀI KHOẢN VÍ CA TRỰC!\nTài khoản này gắn liền với ví: ${walletAddressFromDB}\nNhưng MetaMask trên máy lại đang mở ví: ${currentMetamaskAddress}\nVui lòng đổi tài khoản chính xác trên MetaMask!`);
+        }
+
+        // Bắt ký xác thực (Sign Message) để chứng minh quyền sở hữu (Chống giả mạo địa chỉ ví công khai)
+        const provider = new ethers.BrowserProvider(window.ethereum);
+        const signer = await provider.getSigner();
+        const message = `VNMedID Xác thực ca trực: Tôi là chủ sở hữu tài khoản ${email} tại thời điểm ${new Date().toLocaleString()}`;
+        await signer.signMessage(message);
+      }
+
+      // 3. Nếu vượt qua các bước kiểm tra (hoặc tài khoản mới tinh chưa có ví), tiến hành lưu dữ liệu
       localStorage.setItem("token", token);
       localStorage.setItem("userRole", userRole);
       localStorage.setItem("userId", loginData?.userId || loginData?._id || "");
+      if (walletAddressFromDB) {
+        localStorage.setItem("walletAddress", walletAddressFromDB);
+      }
+
       if (userRole === "doctor") {
         let doctorName = "Bác sĩ VNmedID", doctorSpecialty = "Da liễu", doctorLicense = "BS-123450";
         if (typeof mapBackendToFrontend === "function") {
           try {
             const mapped = mapBackendToFrontend(loginData);
-            if (mapped) { doctorName = mapped.fullName || doctorName; doctorSpecialty = mapped.specialty || doctorSpecialty; doctorLicense = mapped.licenseNumber || doctorLicense; }
+            if (mapped) { 
+              doctorName = mapped.fullName || doctorName; 
+              doctorSpecialty = mapped.specialty || doctorSpecialty; 
+              doctorLicense = mapped.licenseNumber || doctorLicense; 
+            }
           } catch {}
         }
         doctorName = loginData?.["Họ và tên"] || loginData?.fullName || loginData?.email?.split('@')[0] || doctorName;
         doctorSpecialty = loginData?.["Chuyên Khoa"] || loginData?.specialty || doctorSpecialty;
         doctorLicense = loginData?.["Mã Bác sĩ"] || loginData?.["Giấy phép hành nghề"] || loginData?.licenseNumber || doctorLicense;
+        
         localStorage.setItem("fullName", doctorName);
         localStorage.setItem("chuyenKhoa", doctorSpecialty);
         localStorage.setItem("maBacSi", doctorLicense);
       } else {
         localStorage.setItem("fullName", loginData?.fullName || loginData?.["Họ và tên"] || loginData?.email?.split('@')[0] || "Người dùng VNmedID");
       }
+
       const roleRedirect = { patient: "/dashboard/patient", doctor: "/dashboard/doctor", admin: "/dashboard/admin" };
       setSuccess(true);
 
-      // ✅ Chưa có ví → bắt buộc qua setup-wallet, có ví rồi → vào thẳng dashboard
-      if (!loginData?.walletAddress) {
+      // 4. Điều hướng: Nếu tài khoản mới (Bệnh nhân) chưa liên kết ví -> qua setup-wallet. Đã có ví -> vào thẳng Dashboard
+      if (!walletAddressFromDB) {
         localStorage.setItem("redirectAfterWallet", roleRedirect[userRole] || "/");
         navigate("/setup-wallet");
       } else {
         navigate(roleRedirect[userRole] || "/");
       }
+
     } catch (error) {
+      // Bắt toàn bộ lỗi (bao gồm lỗi sai ví ca trực hoặc từ chối ký ví) để hiển thị lên màn hình login
       const msg = error.response?.data?.message || error.message || "Đăng nhập thất bại!";
       setErrors({ general: msg });
-    } finally { setLoading(false); }
+    } finally { 
+      setLoading(false); 
+    }
   };
 
   return (

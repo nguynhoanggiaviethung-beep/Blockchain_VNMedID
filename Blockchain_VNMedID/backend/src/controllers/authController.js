@@ -130,12 +130,10 @@ const registerPatient = async (req, res) => {
     try {
       if (walletAddress) {
         const userRegistry = getContractInstance("userRegistry");
-        await userRegistry.registerUser(walletAddress, commonId.toString(), 1); // 1 = patient
-        console.log(
-          "Đăng ký người dùng trên blockchain thành công"
-        );
+        const tx = await userRegistry.registerUser(walletAddress, commonId.toString(), 1); // 1 = patient
+        await tx.wait();
+        console.log("✅ Đăng ký người dùng trên blockchain thành công. TX Hash:", tx.hash);
       }
-    
     } catch (blockchainError) {
       console.error("Lỗi khi đăng ký người dùng trên blockchain:", blockchainError.message
       );
@@ -176,6 +174,29 @@ const loginWithWallet = async (req, res) => {
         success: false, 
         message: `Ví này đã được liên kết với tài khoản có quyền [${user.role === 'patient' ? 'Bệnh nhân' : 'Bác sĩ'}]. Bạn không thể đăng nhập với tư cách ${roleNameVi}!` 
       });
+    }
+
+    try {
+      const userRegistry = getContractInstance("userRegistry");
+      
+      // Chuyển đổi role chữ thành mã uint8 tương ứng trong Contract của bạn
+      const roleMapUint8 = { "patient": 1, "doctor": 2, "admin": 3 };
+      const currentRoleUint8 = roleMapUint8[user.role] || 0;
+
+      // Gọi hàm kiểm tra trên Smart Contract
+      const isAuthorized = await userRegistry.isAuthorizedRole(walletAddress, currentRoleUint8);
+
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          message: "Xác thực Blockchain thất bại! Ví của bạn chưa được kích hoạt quyền hoặc đã bị vô hiệu hóa trên Smart Contract."
+        });
+      }
+      console.log(`📡 [Blockchain] Xác nhận ví ${walletAddress} có quyền ${user.role} hợp lệ.`);
+    } catch (contractErr) {
+      console.error("❌ Lỗi truy vấn Smart Contract tại loginWithWallet:", contractErr.message);
+      // Bạn có thể chọn chặn lại hoặc cho qua tùy mức độ nghiêm ngặt khi node bị sập
+      return res.status(500).json({ success: false, message: "Hệ thống Blockchain không phản hồi, vui lòng thử lại sau!", error: contractErr.message });
     }
 
     const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";
