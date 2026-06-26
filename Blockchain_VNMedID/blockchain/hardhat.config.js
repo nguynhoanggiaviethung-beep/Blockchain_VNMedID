@@ -1,11 +1,17 @@
 import "@nomicfoundation/hardhat-toolbox";
-import * as dotenv from "dotenv";
-import { defineConfig } from "hardhat/config";
+import dotenv from "dotenv";
+import { fileURLToPath } from "url";
+import { dirname, resolve } from "path";
 
-// Nạp các biến từ file .env
-dotenv.config();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+dotenv.config({ path: resolve(__dirname, ".env") });
 
-export default defineConfig({
+const SEPOLIA_URL = process.env.SEPOLIA_RPC_URL || "";
+const PRIVATE_KEY = process.env.SEPOLIA_PRIVATE_KEY || "";
+const ETHERSCAN_KEY = process.env.ETHERSCAN_API_KEY || "";
+
+export default {
   solidity: {
     version: "0.8.20",
     settings: {
@@ -15,18 +21,21 @@ export default defineConfig({
       },
     },
   },
-  paths: {
-    sources: "./contracts",
-    artifacts: "./artifacts",
-    cache: "./cache",
-  },
   networks: {
+    hardhat: {},
     localhost: {
       url: "http://127.0.0.1:8545",
     },
     sepolia: {
-      url: process.env.SEPOLIA_RPC_URL || "",
-      accounts: process.env.PRIVATE_KEY ? [process.env.PRIVATE_KEY] : [],
+      url: SEPOLIA_URL,
+      accounts: PRIVATE_KEY ? [PRIVATE_KEY] : [],
+      chainId: 11155111,
     },
   },
-});
+  etherscan: {
+    apiKey: ETHERSCAN_KEY,
+  },
+  sourcify: {
+    enabled: false,
+  },
+};
