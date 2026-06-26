@@ -262,6 +262,30 @@ const Login = () => {
 
   useClickStars(); // ✅ hiệu ứng bắn sao khi click
 
+  useEffect(() => {
+    if (window.ethereum) {
+      const handleAccountsChanged = (accounts) => {
+        if (accounts.length > 0) {
+          console.log("🔄 Phát hiện bác sĩ đã thực hiện đổi ví MetaMask sang:", accounts[0]);
+          // 🛠️ Xóa thông báo lỗi sai ca trực cũ ngay lập tức khi phát hiện ví thay đổi
+          setErrors(prev => ({ ...prev, general: "" }));
+        } else {
+          // Trường hợp người dùng ngắt kết nối hoàn toàn tất cả tài khoản ví
+          setErrors({ general: "Bạn đã ngắt kết nối toàn bộ tài khoản ví trên MetaMask." });
+        }
+      };
+
+      // Đăng ký cổng lắng nghe sự kiện từ MetaMask
+      window.ethereum.on('accountsChanged', handleAccountsChanged);
+
+      // Thu dọn sự kiện khi nhảy trang (unmount) để tránh rò rỉ bộ nhớ (Memory Leak)
+      return () => {
+        window.ethereum.removeListener('accountsChanged', handleAccountsChanged);
+      };
+    }
+  }, []);
+  // 🌟 KẾT THÚC ĐOẠN CODE CHÈN 🌟
+
   const validate = () => {
     const e = {};
     if (!email) e.email = "Vui lòng nhập email";
