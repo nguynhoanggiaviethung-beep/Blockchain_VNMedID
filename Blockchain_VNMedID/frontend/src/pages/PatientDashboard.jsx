@@ -75,8 +75,8 @@ export default function PatientDashboard() {
   const [hospitals, setHospitals] = useState([]);
   const BASE_URL =
     import.meta.env.VITE_API_URL ||
-    "https://blockchain-vnmedid.onrender.com/api/v1";
-  const PAYMENT_CONTRACT_ADDRESS = "0x1bBBa8DCC7f01C43DA82b4935BD93a80EA1f6Ef6";
+    "http://localhost:5000/api/v1";
+  const PAYMENT_CONTRACT_ADDRESS = "0xeD8F3cA220C85Bd7976fB0136f72B6b5aB3CB85c";
 
   // State quản lý dữ liệu Bệnh nhân
   const [patient, setPatient] = useState(null);
