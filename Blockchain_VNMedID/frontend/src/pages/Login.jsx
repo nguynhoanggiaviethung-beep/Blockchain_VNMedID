@@ -388,11 +388,35 @@ const Login = () => {
           throw new Error(`🛑 SAI TÀI KHOẢN VÍ CA TRỰC!\nTài khoản này gắn liền với ví: ${walletAddressFromDB}\nNhưng MetaMask trên máy lại đang mở ví: ${currentMetamaskAddress}\nVui lòng đổi tài khoản chính xác trên MetaMask!`);
         }
 
-        // Bắt ký xác thực (Sign Message) để chứng minh quyền sở hữu (Chống giả mạo địa chỉ ví công khai)
-        const provider = new ethers.BrowserProvider(window.ethereum);
-        const signer = await provider.getSigner();
-        const message = `VNMedID Xác thực ca trực: Tôi là chủ sở hữu tài khoản ${email} tại thời điểm ${new Date().toLocaleString()}`;
-        await signer.signMessage(message);
+        // 🌟 SỬA LẠI ĐOẠN NÀY ĐỂ TƯƠNG THÍCH MỌI PHIÊN BẢN ETHERS v5/v6
+        let provider;
+        let signer;
+
+        if (ethers.BrowserProvider) {
+          // Dành cho ethers v6
+          provider = new ethers.BrowserProvider(window.ethereum);
+          signer = await provider.getSigner();
+        } else if (ethers.providers && ethers.providers.Web3Provider) {
+          // Dành cho ethers v5
+          provider = new ethers.providers.Web3Provider(window.ethereum);
+          signer = provider.getSigner();
+        } else {
+          // Phương án dự phòng trực tiếp qua RPC của MetaMask nếu ethers bị lỗi build
+          const message = `VNMedID Xác thực ca trực: Tôi là chủ sở hữu tài khoản ${email} tại thời điểm ${new Date().toLocaleString()}`;
+          // Chuyển message sang hex
+          const hexMessage = `0x${Buffer.from(message, 'utf8').toString('hex')}`;
+          await window.ethereum.request({
+            method: 'personal_sign',
+            params: [hexMessage, currentMetamaskAddress],
+          });
+          signer = null; // Bỏ qua bước dưới vì đã sign bằng RPC thành công
+        }
+
+        // Nếu dùng thư viện ethers thành công thì gọi hàm signMessage của signer
+        if (signer) {
+          const message = `VNMedID Xác thực ca trực: Tôi là chủ sở hữu tài khoản ${email} tại thời điểm ${new Date().toLocaleString()}`;
+          await signer.signMessage(message);
+        }
       }
 
       // 3. Nếu vượt qua các bước kiểm tra (hoặc tài khoản mới tinh chưa có ví), tiến hành lưu dữ liệu
