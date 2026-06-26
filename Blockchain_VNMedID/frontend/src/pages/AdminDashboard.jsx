@@ -5,17 +5,20 @@ import AdminPatients from './AdminPatients';
 import AdminDoctors from './AdminDoctors';
 import AdminRecords from './AdminRecords';
 import AdminSchedule from './AdminSchedule';
+import ManageInvoices from './ManageInvoices'; // 1. IMPORT COMPONENT MỚI VÀO ĐÂY
 
 const PRIMARY = "#0A2D6E"
 const PRIMARY_MED = "#1A4FA8"
 const PRIMARY_LIGHT = "#E6F1FB"
 
+// 2. THÊM TAB HÓA ĐƠN VÀO DANH SÁCH MENU SIDEBAR
 const MENU = [
   { key: "overview",  icon: "📊", label: "Tổng quan" },
   { key: "patients",  icon: "👥", label: "Bệnh nhân" },
   { key: "doctors",   icon: "🩺", label: "Bác sĩ" },
   { key: "records",   icon: "📋", label: "Lượt khám" },
   { key: "schedule",  icon: "📅", label: "Lịch khám" },
+  { key: "invoices",  icon: "💳", label: "Quản lý hóa đơn" }, // Thêm dòng này
 ]
 
 export default function AdminDashboard() {
@@ -25,12 +28,14 @@ export default function AdminDashboard() {
 
   const handleLogout = () => { localStorage.clear(); navigate("/") }
 
+  // 3. THÊM ĐIỀU KIỆN RENDER NỘI DUNG KHI CLICK VÀO TAB INVOICES
   const renderContent = () => {
     if (activeTab === "overview") return <AdminOverview />
     if (activeTab === "patients") return <AdminPatients />
     if (activeTab === "doctors")  return <AdminDoctors />
     if (activeTab === "records")  return <AdminRecords />
     if (activeTab === "schedule") return <AdminSchedule />
+    if (activeTab === "invoices") return <ManageInvoices /> // Thêm dòng này
   }
 
   return (

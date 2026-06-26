@@ -185,3 +185,35 @@ exports.getInvoiceById = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống khi lấy chi tiết hóa đơn', error: error.message });
   }
 };
+// Thêm vào cuối invoiceController.js
+// invoiceController.js
+exports.getAllInvoices = async (req, res) => {
+  try {
+    const User = require('../models/User');
+    
+    const invoices = await Invoice.find({}).sort({ createdAt: -1 }).lean();
+
+    // Lấy toàn bộ walletAddress duy nhất từ các hóa đơn
+    const wallets = [...new Set(invoices.map(inv => inv.patientWallet).filter(Boolean))];
+
+    // Query 1 lần, map lại theo wallet
+    const users = await User.find({
+      walletAddress: { $in: wallets.map(w => new RegExp(`^${w}$`, 'i')) }
+    }).select('fullName walletAddress').lean();
+
+    const walletToName = {};
+    users.forEach(u => {
+      walletToName[u.walletAddress.toLowerCase()] = u.fullName;
+    });
+
+    // Gắn patientName vào từng hóa đơn
+    const result = invoices.map(inv => ({
+      ...inv,
+      patientName: walletToName[inv.patientWallet?.toLowerCase()] || "Không xác định"
+    }));
+
+    return res.json({ success: true, data: result });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};
