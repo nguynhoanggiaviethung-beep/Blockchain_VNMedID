@@ -11,7 +11,7 @@ const ManageInvoices = () => {
   const fetchInvoices = async () => {
     try {
       const token = localStorage.getItem("token");
-      const response = await axios.get("http://localhost:5000/api/v1/invoices", {
+      const response = await axios.get("https://blockchain-vnmedid.onrender.com/api/v1/invoices", {
         headers: { Authorization: `Bearer ${token}` },
       });
       setInvoices(response.data.data);
@@ -26,7 +26,8 @@ const ManageInvoices = () => {
   if (error) return <div style={{ padding: 24, textAlign: "center", color: "#EF4444" }}>{error}</div>;
 
   const paid = invoices.filter(i => i.paymentStatus === "paid").length;
-  const unpaid = invoices.length - paid;
+  const failed = invoices.filter(i => i.paymentStatus === "failed").length;
+  const unpaid = invoices.length - paid - failed;
 
   return (
     <div style={{ padding: 24, background: "#F8FAFC", minHeight: "100%" }}>
@@ -39,7 +40,7 @@ const ManageInvoices = () => {
       </div>
 
       {/* Stats */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(3, 1fr)", gap: 16, marginBottom: 24 }}>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 16, marginBottom: 24 }}>
         <div style={{ background: "#EFF6FF", border: "1px solid #BFDBFE", borderRadius: 12, padding: 20, textAlign: "center" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#1D4ED8" }}>{invoices.length}</div>
           <div style={{ fontSize: 13, color: "#3B82F6", marginTop: 4 }}>Tổng hóa đơn</div>
@@ -51,6 +52,10 @@ const ManageInvoices = () => {
         <div style={{ background: "#FEFCE8", border: "1px solid #FDE68A", borderRadius: 12, padding: 20, textAlign: "center" }}>
           <div style={{ fontSize: 28, fontWeight: 800, color: "#B45309" }}>{unpaid}</div>
           <div style={{ fontSize: 13, color: "#D97706", marginTop: 4 }}>Chưa thanh toán</div>
+        </div>
+        <div style={{ background: "#FFF1F2", border: "1px solid #FECDD3", borderRadius: 12, padding: 20, textAlign: "center" }}>
+          <div style={{ fontSize: 28, fontWeight: 800, color: "#BE123C" }}>{failed}</div>
+          <div style={{ fontSize: 13, color: "#E11D48", marginTop: 4 }}>Giao dịch thất bại</div>
         </div>
       </div>
 
@@ -67,6 +72,7 @@ const ManageInvoices = () => {
           <tbody>
             {invoices.map((invoice, index) => {
               const isPaid = invoice.paymentStatus === "paid";
+              const isFailed = invoice.paymentStatus === "failed";
               const date = new Date(invoice.createdAt);
               return (
                 <tr
@@ -108,15 +114,41 @@ const ManageInvoices = () => {
 
                   {/* Trạng thái */}
                   <td style={{ padding: "12px 16px" }}>
-                    <span style={{
-                      padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
-                      background: isPaid ? "#DCFCE7" : "#FEF9C3",
-                      color: isPaid ? "#15803D" : "#B45309",
-                      border: `1px solid ${isPaid ? "#86EFAC" : "#FDE68A"}`,
-                      whiteSpace: "nowrap"
-                    }}>
-                      {isPaid ? "✅ Đã thanh toán" : "⏳ Chưa thanh toán"}
-                    </span>
+                    {isPaid && (
+                      <span style={{
+                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: "#DCFCE7", color: "#15803D", border: "1px solid #86EFAC", whiteSpace: "nowrap"
+                      }}>
+                        ✅ Đã thanh toán
+                      </span>
+                    )}
+                    {isFailed && (
+                      <div>
+                        <span style={{
+                          padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                          background: "#FFF1F2", color: "#BE123C", border: "1px solid #FECDD3", whiteSpace: "nowrap"
+                        }}>
+                          ❌ Thất bại
+                        </span>
+                        {invoice.failReason && (
+                          <div style={{
+                            marginTop: 4, fontSize: 11, color: "#9F1239",
+                            background: "#FFF1F2", borderRadius: 6, padding: "2px 8px",
+                            maxWidth: 180, wordBreak: "break-word"
+                          }}>
+                            {invoice.failReason}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {!isPaid && !isFailed && (
+                      <span style={{
+                        padding: "4px 12px", borderRadius: 20, fontSize: 12, fontWeight: 700,
+                        background: "#FEF9C3", color: "#B45309", border: "1px solid #FDE68A", whiteSpace: "nowrap"
+                      }}>
+                        ⏳ Chưa thanh toán
+                      </span>
+                    )}
                   </td>
 
                   {/* Ngày tạo */}
@@ -133,8 +165,6 @@ const ManageInvoices = () => {
                   <td style={{ padding: "12px 16px" }}>
                     {invoice.txHash ? (
                       <a
-                      
-                      
                         href={`https://sepolia.etherscan.io/tx/${invoice.txHash}`}
                         target="_blank"
                         rel="noopener noreferrer"

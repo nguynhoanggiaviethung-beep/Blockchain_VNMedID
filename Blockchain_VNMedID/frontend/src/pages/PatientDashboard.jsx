@@ -75,7 +75,7 @@ export default function PatientDashboard() {
   const [hospitals, setHospitals] = useState([]);
   const BASE_URL =
     import.meta.env.VITE_API_URL ||
-    "http://localhost:5000/api/v1";
+    "https://blockchain-vnmedid.onrender.com/api/v1";
   const PAYMENT_CONTRACT_ADDRESS = "0xeD8F3cA220C85Bd7976fB0136f72B6b5aB3CB85c";
 
   // State quản lý dữ liệu Bệnh nhân
@@ -274,6 +274,21 @@ export default function PatientDashboard() {
     if (tab === "info" && userId) loadBlockchainRecords(userId);
   }, [tab]);
 
+  const updateInvoiceStatusToFailed = async (invoiceId, reason) => {
+    try {
+      await fetch(`${BASE_URL}/invoices/${invoiceId}/status`, {
+        method: 'PATCH',
+        headers: {
+          'Content-Type': 'application/json',
+          ...headers // spread các header hiện có (Authorization token, v.v.)
+        },
+        body: JSON.stringify({ invoiceId, status: 'failed', reason })
+      });
+    } catch (err) {
+      console.error('Không thể cập nhật trạng thái failed lên server:', err);
+    }
+  };
+
   // 5. Xử lý thanh toán hóa đơn bằng ví Web3 MetaMask
   const handlePayWithMetaMask = async (invoice) => {
     setInvoiceError("");
@@ -370,6 +385,7 @@ export default function PatientDashboard() {
         setInvoiceError(
           "⚠️ Không nhận được biên lai từ mạng lưới Sepolia (Mạng bận). Hãy kiểm tra lại sau ít phút.",
         );
+        await updateInvoiceStatusToFailed(invoice.invoiceId, 'Timeout: Không nhận được receipt từ Sepolia');
         return;
       }
 
@@ -378,6 +394,7 @@ export default function PatientDashboard() {
         setInvoiceError(
           "❌ Giao dịch đã bị từ chối/thất bại trên Blockchain (Reverted)! Vui lòng kiểm tra số dư ví.",
         );
+        await updateInvoiceStatusToFailed(invoice.invoiceId, 'Reverted: Giao dịch bị từ chối trên Blockchain');
         return;
       }
 
@@ -1397,7 +1414,7 @@ export default function PatientDashboard() {
                           </thead>
                           <tbody>
                             {blockchainData?.history &&
-                            blockchainData.history.length > 0 ? (
+                              blockchainData.history.length > 0 ? (
                               blockchainData.history.map((block, idx) => (
                                 <tr
                                   key={idx}
@@ -1430,36 +1447,35 @@ export default function PatientDashboard() {
                                       }
                                     })()}
                                   </td>
-                                  <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                                    {(() => {
-                                      // Dựa trên database của bạn, trường lưu transaction hash là recordTxHash
-                                      const tx = block.recordTxHash || block.txHash || block.transactionHash || block.hash;
-                                      
-                                      if (!tx) return <span style={{ color: GRAY_TEXT, fontStyle: "italic" }}>Không có mã</span>;
-                                      
-                                      return (
-                                        <a
-                                          href={`https://sepolia.etherscan.io/tx/${tx}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          style={{
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            gap: "4px",
-                                            background: "#16A34A", // Màu xanh lá đồng bộ hệ thống của bạn
-                                            color: "white",
-                                            padding: "6px 14px",
-                                            borderRadius: "6px",
-                                            fontSize: "12px",
-                                            fontWeight: "600",
-                                            textDecoration: "none",
-                                            boxShadow: "0 2px 4px rgba(22,163,74,0.15)",
-                                          }}
-                                        >
-                                          🔍 Etherscan
-                                        </a>
-                                      );
-                                    })()}
+                                  <td style={{ padding: "10px 12px" }}>
+                                    {/* 🌟 ĐỔI THÀNH block.hash như trong Network trả về */}
+                                    <code
+                                      style={{
+                                        color: "#16A34A",
+                                        fontWeight: 500,
+                                        wordBreak: "break-all",
+                                      }}
+                                    >
+                                      {block.recordHash}
+                                    </code>
+                                    {block.txHash ? (
+                                      <a
+                                        href={`https://sepolia.etherscan.io/tx/${block.txHash}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        style={{
+                                          display: "inline-flex", alignItems: "center", gap: 4,
+                                          padding: "5px 12px", background: "#3B82F6", color: "#fff",
+                                          borderRadius: 8, fontSize: 12, fontWeight: 600,
+                                          textDecoration: "none", boxShadow: "0 1px 3px rgba(59,130,246,0.4)"
+                                        }}
+                                      >
+                                        🔍 Etherscan
+                                      </a>
+                                    ) : (
+                                      <span style={{ color: "#CBD5E1", fontSize: 12, fontStyle: "italic" }}>— Chưa có</span>
+                                    )}
+
                                   </td>
                                 </tr>
                               ))
@@ -1513,22 +1529,22 @@ export default function PatientDashboard() {
                       </option>
                       {hospitals && hospitals.length > 0
                         ? hospitals.map((h, idx) => {
-                            const nameStr =
-                              typeof h === "string"
-                                ? h
-                                : h.hospitalName || h.name || "";
-                            if (!nameStr) return null;
-                            return (
-                              <option key={idx} value={nameStr}>
-                                {nameStr}
-                              </option>
-                            );
-                          })
-                        : HOSPITALS.map((hospital, idx) => (
-                            <option key={idx} value={hospital}>
-                              {hospital}
+                          const nameStr =
+                            typeof h === "string"
+                              ? h
+                              : h.hospitalName || h.name || "";
+                          if (!nameStr) return null;
+                          return (
+                            <option key={idx} value={nameStr}>
+                              {nameStr}
                             </option>
-                          ))}
+                          );
+                        })
+                        : HOSPITALS.map((hospital, idx) => (
+                          <option key={idx} value={hospital}>
+                            {hospital}
+                          </option>
+                        ))}
                     </select>
                   </div>
 
@@ -1768,7 +1784,7 @@ export default function PatientDashboard() {
                                 }}
                               >
                                 <strong>Mã băm hóa đơn TxHash:</strong>{" "}
-                                {invoice.txHash || "Thanh toán nội bộ"}
+                                {invoice.txHash ? <a href={`https://sepolia.etherscan.io/tx/${invoice.txHash}`} target="_blank">{invoice.txHash}</a> : "Thanh toán nội bộ"}
                               </div>
                             )}
                           </div>
@@ -1928,11 +1944,11 @@ export default function PatientDashboard() {
                                       >
                                         {Number(
                                           item.totalPrice ||
-                                            item.totalVND ||
-                                            (item.unitPrice ||
-                                              item.priceVND ||
-                                              0) *
-                                              (item.quantity || item.qty || 0),
+                                          item.totalVND ||
+                                          (item.unitPrice ||
+                                            item.priceVND ||
+                                            0) *
+                                          (item.quantity || item.qty || 0),
                                         ).toLocaleString("vi-VN")}
                                         đ
                                       </td>
@@ -2096,8 +2112,8 @@ export default function PatientDashboard() {
                               ⏰ Tự hết hạn:{" "}
                               {req.expiresAt
                                 ? new Date(req.expiresAt).toLocaleString(
-                                    "vi-VN",
-                                  )
+                                  "vi-VN",
+                                )
                                 : "---"}
                             </span>
                             <button

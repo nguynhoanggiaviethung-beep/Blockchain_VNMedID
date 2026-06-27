@@ -1,13 +1,13 @@
 // C:\NEW BLOCKCHAIN\Blockchain_VNMedID\backend\src\controllers\medicalRecordController.js
 
-const MedicalRecord = require('../models/MedicalRecord'); 
+const MedicalRecord = require('../models/MedicalRecord');
 const Visit = require('../models/Visit');
-const Invoice = require('../models/Invoice'); 
+const Invoice = require('../models/Invoice');
 const Patient = require('../models/Patient'); // ✅ Đảm bảo import Model Patient chính thức
 const mongoose = require('mongoose');
 const { ethers } = require('ethers');
 const { getContractInstance } = require('../config/web3');
-const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs'); 
+const { uploadJSONToIPFS, getIPFSGatewayUrl } = require('../utils/ipfs');
 
 // =========================================================================
 // 💊 BẢNG GIÁ 50 LOẠI THUỐC CỐ ĐỊNH (Tính bằng VND thực tế từ Cục Quản lý Dược)
@@ -77,10 +77,10 @@ const createRecord = async (req, res) => {
 
         await newRecord.save();
 
-        return res.status(201).json({ 
-            success: true, 
+        return res.status(201).json({
+            success: true,
             message: "Đăng ký ca khám bệnh thành công!",
-            data: newRecord 
+            data: newRecord
         });
     } catch (error) {
         return res.status(500).json({ success: false, error: error.message });
@@ -93,7 +93,7 @@ const createRecord = async (req, res) => {
 const getPendingRecords = async (req, res) => {
     try {
         const pendingList = await MedicalRecord.find({ status: "Pending" })
-                                               .populate('patientId', 'fullName dob gender phone');
+            .populate('patientId', 'fullName dob gender phone');
 
         const formattedData = pendingList.map(item => ({
             _id: item._id,
@@ -137,9 +137,9 @@ const getDoctorPendingList = async (req, res) => {
                     const patient = await Patient.findById(objId);
                     if (patient) {
                         patientInfo.fullName = patient.fullName || "Bệnh nhân";
-                        patientInfo.dob      = patient.dob      || "";
-                        patientInfo.gender   = patient.gender   || "";
-                        patientInfo.phone    = patient.phone    || "---";
+                        patientInfo.dob = patient.dob || "";
+                        patientInfo.gender = patient.gender || "";
+                        patientInfo.phone = patient.phone || "---";
                     }
                 }
             } catch (e) {
@@ -186,9 +186,9 @@ const getDoctorCompletedList = async (req, res) => {
                     const patient = await Patient.findById(objId);
                     if (patient) {
                         patientInfo.fullName = patient.fullName || "Bệnh nhân";
-                        patientInfo.dob      = patient.dob      || "";
-                        patientInfo.gender   = patient.gender   || "";
-                        patientInfo.phone    = patient.phone    || "---";
+                        patientInfo.dob = patient.dob || "";
+                        patientInfo.gender = patient.gender || "";
+                        patientInfo.phone = patient.phone || "---";
                     }
                 }
             } catch (e) {
@@ -202,7 +202,7 @@ const getDoctorCompletedList = async (req, res) => {
                 chanDoanChuyenMon: v.chanDoanChuyenMon,
                 huongDieuTri: v.huongDieuTri,
                 doctorName: v.doctorName,
-                ipfsHash: v.ipfsHash || "",      
+                ipfsHash: v.ipfsHash || "",
                 ...patientInfo
             };
         }));
@@ -238,7 +238,7 @@ const completeVisit = async (req, res) => {
     console.log("🚀 COMPLETE VISIT CALLED");
     console.log("🧐 MEDICAL_RECORD_ADDRESS ĐANG ĐỌC TỪ ENV:", process.env.MEDICAL_RECORD_ADDRESS);
     console.log("=========================================");
-    
+
     try {
         const { recordId, chanDoanChuyenMon, huongDieuTri, doctorName } = req.body;
         const diagnose = chanDoanChuyenMon;
@@ -259,9 +259,9 @@ const completeVisit = async (req, res) => {
         try {
             const db = mongoose.connection.db;
             let patientObjectId;
-            try { patientObjectId = new mongoose.Types.ObjectId(existingVisit.patientId); } catch(_) {}
-            const patientUser = await db.collection('users').findOne({ 
-                $or: [{ _id: patientObjectId }, { _id: existingVisit.patientId }] 
+            try { patientObjectId = new mongoose.Types.ObjectId(existingVisit.patientId); } catch (_) { }
+            const patientUser = await db.collection('users').findOne({
+                $or: [{ _id: patientObjectId }, { _id: existingVisit.patientId }]
             });
             if (patientUser && patientUser.walletAddress) {
                 patientWalletAddress = patientUser.walletAddress;
@@ -273,15 +273,15 @@ const completeVisit = async (req, res) => {
         // --------------------------------------------------------
         // 💳 BƯỚC 4: QUÉT ĐƠN THUỐC, LƯU CHI TIẾT VÀ QUY ĐỔI SANG ETH
         // --------------------------------------------------------
-        let totalETH = 0.002; 
+        let totalETH = 0.002;
         let invoiceItems = []; // Mảng chứa chi tiết tên danh mục/thuốc cùng giá tiền mặt
         let totalVND = 100000; // Mặc định phí khám gốc ban đầu là 100.000 VND
 
         try {
             if (patientWalletAddress) {
-                const generatedInvoiceId = `INV-${recordId.toString().substring(16)}`; 
-                const prescriptionText = (huongDieuTri || "").toLowerCase(); 
-                
+                const generatedInvoiceId = `INV-${recordId.toString().substring(16)}`;
+                const prescriptionText = (huongDieuTri || "").toLowerCase();
+
                 // Khởi tạo mục đầu tiên là chi phí khám bệnh
                 invoiceItems.push({
                     drugName: "Phí khám lâm sàng tổng quát",
@@ -299,21 +299,21 @@ const completeVisit = async (req, res) => {
                         console.log(`[Tính tiền] Phát hiện thuốc: ${drug} -> Cộng thêm ${DRUG_PRICE_LIST[drug]} VND`);
                     }
                 });
-                
+
                 console.log(`[Tỷ giá] Tổng hóa đơn tiền mặt: ${totalVND.toLocaleString('vi-VN')} VND`);
 
                 // Tỷ giá quy đổi ETH/VND cố định (1 ETH = 90.000.000 VND)
-                const ETH_TO_VND_RATE = 90000000; 
+                const ETH_TO_VND_RATE = 90000000;
                 totalETH = totalVND / ETH_TO_VND_RATE;
                 totalETH = parseFloat(totalETH.toFixed(5));
-                if (totalETH === 0) totalETH = 0.001; 
+                if (totalETH === 0) totalETH = 0.001;
 
                 console.log(`[Tỷ giá] Đã quy đổi sang Web3: ${totalETH} ETH`);
 
                 // Lưu thông tin hóa đơn mới CHỨA CẢ CHI TIẾT TÊN THUỐC + GIÁ vào MongoDB
                 const autoInvoice = new Invoice({
                     invoiceId: generatedInvoiceId,
-                    amount: totalETH, 
+                    amount: totalETH,
                     patientWallet: patientWalletAddress,
                     paymentStatus: 'pending',
                     items: invoiceItems,     // 🌟 Đưa mảng chi tiết vào DB
@@ -325,7 +325,7 @@ const completeVisit = async (req, res) => {
                 // Gọi Smart Contract Payment đồng bộ hóa đơn lên chuỗi khối Sepolia Testnet
                 const paymentContract = getContractInstance('payment');
                 const amountWei = ethers.parseEther(totalETH.toString());
-                
+
                 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientWalletAddress, amountWei);
                 await paymentTx.wait();
 
@@ -365,18 +365,21 @@ const completeVisit = async (req, res) => {
         // --------------------------------------------------------
         const visit = await Visit.findByIdAndUpdate(
             visitObjectId,
-            { $set: {
-                chanDoanChuyenMon: diagnose,
-                huongDieuTri: prescription,
-                doctorName: doctorName || "",
-                status: "completed",
-                ipfsHash: ipfsHash, 
-                updatedAt: new Date()
-            }},
+            {
+                $set: {
+                    chanDoanChuyenMon: diagnose,
+                    huongDieuTri: prescription,
+                    doctorName: doctorName || "",
+                    status: "completed",
+                    ipfsHash: ipfsHash,
+                    updatedAt: new Date()
+                }
+            },
             { returnDocument: 'after' }
         );
 
         const targetPatientKey = String(visit.patientId);
+
 
         // --------------------------------------------------------
         // ⛓️ BƯỚC 3: ĐỒNG BỘ MÃ HASH IPFS LÊN SMART CONTRACT (SEPOLIA)
@@ -392,13 +395,13 @@ const completeVisit = async (req, res) => {
             console.log(`[Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey}`);
             const medicalContract = getContractInstance('medicalRecord');
 
-            const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0x66Bd396353701d97a7C21A23f57044761133dcD5"; 
+            const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0x66Bd396353701d97a7C21A23f57044761133dcD5";
             console.log(`[Blockchain] Địa chỉ thực hiện giao dịch (Hospital/Admin): ${backendSignerAddress}`);
 
             const tx = await medicalContract.addRecordHash(
                 targetPatientKey,
-                backendSignerAddress, 
-                recordHash
+                backendSignerAddress,
+                visit.recordTxHash
             );
             await tx.wait();
             recordTxHash = tx.hash;
@@ -409,10 +412,26 @@ const completeVisit = async (req, res) => {
             console.log("======================================");
         }
 
-        return res.json({ 
-            success: true, 
-            message: "Lưu bệnh án và đồng bộ chuỗi khối thành công!", 
-            data: visit, 
+        try {
+            const medicalRecord = new MedicalRecord({
+                visitId: visitObjectId,
+                patientId: existingVisit.patientId,
+                doctorId: existingVisit.doctorId,
+                diagnosis: diagnose,
+                notes: prescription,
+                ipfsHash: ipfsHash,
+                blockchainTxHash: recordTxHash
+            });
+            await medicalRecord.save();
+            console.log(`[MedicalRecord] Đã tạo bệnh án kèm txHash: ${recordTxHash}`);
+        } catch (mrError) {
+            console.error('❌ Lỗi tạo MedicalRecord:', mrError.message);
+        }
+
+        return res.json({
+            success: true,
+            message: "Lưu bệnh án và đồng bộ chuỗi khối thành công!",
+            data: visit,
             recordTxHash,
             ipfsHash,
             ipfsUrl
@@ -422,41 +441,37 @@ const completeVisit = async (req, res) => {
     }
 };
 
-// =========================================================================
-// 7. TRUY VẤN DỮ LIỆU LỊCH SỬ TỪ CONTRACT (Hỗ trợ tìm kiếm linh hoạt theo Ví/ID)
-// =========================================================================
 const getOnChainRecord = async (req, res) => {
     try {
-        const { patientAddress } = req.params; // Nhận vào từ URL định tuyến
+        const { patientAddress } = req.params;
         const db = mongoose.connection.db;
 
         if (!patientAddress) {
             return res.status(400).json({ success: false, message: "Thiếu mã định danh hoặc địa chỉ ví bệnh nhân!" });
         }
 
-        // Khởi tạo key mặc định phục vụ truy vấn Smart Contract là tham số truyền vào
         let targetContractKey = patientAddress;
 
-        // Bẫy lỗi bảo mật: Nếu frontend truyền vào địa chỉ ví dạng '0x...', 
-        // ta tìm xem ID tương ứng trong database để map với chuỗi key lúc lưu On-chain bằng completeVisit
         if (patientAddress.startsWith("0x")) {
             const linkedUser = await db.collection('users').findOne({
                 walletAddress: { $regex: new RegExp(`^${patientAddress}$`, 'i') }
             });
             if (linkedUser) {
-                targetContractKey = String(linkedUser._id); // Chuyển đổi ngược lại thành mã chuỗi MongoDB ID giống cơ chế lưu
+                targetContractKey = String(linkedUser._id);
                 console.log(`[Đồng bộ On-chain] Đã map địa chỉ ví sang chuỗi định danh gốc: ${targetContractKey}`);
             }
         }
 
-        const medicalContract = getContractInstance('medicalRecord');
-        let records = [];
+        const visits = await Visit.find({
+            patientId: mongoose.Types.ObjectId.isValid(targetContractKey)
+                ? new mongoose.Types.ObjectId(targetContractKey)
+                : targetContractKey
+        })
+            .sort({ createdAt: 1 })
+            .select('recordTxHash chanDoanChuyenMon doctorName updatedAt')
+            .lean();
 
-        try {
-            // Truy vấn trực tiếp bằng chuỗi key định danh khớp hoàn toàn với cấu trúc Blockchain
-            records = await medicalContract.getPatientRecord(targetContractKey);
-        } catch (contractError) {
-            console.warn(`⚠️ Bệnh nhân chưa có hồ sơ On-chain:`, contractError.message);
+        if (!visits.length) {
             return res.status(200).json({
                 success: true,
                 data: { patientAddress, hospitalAddress: "0x0000000000000000000000000000000000000000", history: [] }
@@ -543,13 +558,13 @@ const getPatientHistory = async (req, res) => {
 };
 
 module.exports = {
-    createRecord,    
+    createRecord,
     getPendingRecords,
     getDoctorPendingList,
     getDoctorCompletedList,
     getDoctorCompletedCount,
     completeVisit,
-    getOnChainRecord, 
+    getOnChainRecord,
     getRecordById,
     updateRecordByDoctor,
     getPatientHistory

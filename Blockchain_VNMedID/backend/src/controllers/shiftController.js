@@ -135,6 +135,7 @@ exports.deleteShift = async (req, res) => {
 exports.autoSchedule = async (req, res) => {
   try {
     const { specialty, startDate, weeks = 4 } = req.body;
+    
 
     if (!specialty || !startDate) {
       return res.status(400).json({
@@ -173,6 +174,8 @@ exports.autoSchedule = async (req, res) => {
 
     const workingDays = [];
     const start = new Date(startDate);
+
+
 
     for (let w = 0; w < weeks; w++) {
       for (let d = 0; d < 7; d++) {
@@ -230,6 +233,10 @@ exports.autoSchedule = async (req, res) => {
     bulkInsert.forEach(s => {
       summary[s.doctorName] = (summary[s.doctorName] || 0) + 1;
     });
+
+        console.log("doctors found:", doctors.length);
+console.log("workingDays:", workingDays);
+console.log("bulkInsert length:", bulkInsert.length);
 
     return res.status(201).json({
       success: true,
