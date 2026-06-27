@@ -7,7 +7,9 @@ router.get('/my', xacThucToken, phanQuyen('patient'), getMyInvoices);
 router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment); // ← LÊN TRƯỚC
 router.post('/', xacThucToken, phanQuyen('admin'), createInvoice);
 router.get('/', xacThucToken, phanQuyen('admin'), getAllInvoices);
-router.patch(':id/status', updateInvoiceStatus);
+
+router.patch('/:id/status', xacThucToken, phanQuyen('admin', 'patient'), updateInvoiceStatus);
+
 router.get('/:id', xacThucToken, phanQuyen('patient', 'admin'), getInvoiceById); // ← XUỐNG SAU
 
 
