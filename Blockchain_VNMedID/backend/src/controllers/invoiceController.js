@@ -133,32 +133,57 @@ exports.makePayment = async (req, res) => {
 exports.getMyInvoices = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-    const userId = req.userId || req.user?.userId || req.user?.id;
+    
+    // 1. Lấy userId từ tất cả các vị trí có thể có của Middleware gán vào
+    const userId = req.userId || req.user?.id || req.user?.userId;
     let patientWallet = null;
 
+    // 2. Tìm ví của User trong cơ sở dữ liệu
     if (userId) {
       try {
-        let objId = mongoose.Types.ObjectId.isValid(userId) ? new mongoose.Types.ObjectId(userId) : userId;
+        // Kiểm tra hợp lệ và chuyển đổi sang ObjectId chuẩn mã nguồn MongoDB
+        const isObjectId = mongoose.Types.ObjectId.isValid(userId);
+        const objId = isObjectId ? new mongoose.Types.ObjectId(userId.toString()) : userId;
+        
         const user = await db.collection('users').findOne({ _id: objId });
         patientWallet = user?.walletAddress || null;
-      } catch {}
+      } catch (dbErr) {
+        console.error("Lỗi truy vấn ví user:", dbErr);
+      }
     }
 
+    // 3. Dự phòng: Nếu không tìm thấy trong DB, thử lấy từ query params hoặc headers do frontend gửi lên
     if (!patientWallet) {
-      patientWallet = req.query.wallet || null;
+      patientWallet = req.query.wallet || req.query.patientWallet || null;
     }
 
+    // 4. Nếu cuối cùng vẫn không xác định được ví, trả về mảng rỗng thay vì báo lỗi hệ thống
     if (!patientWallet) {
-      return res.json({ success: true, data: [], message: 'Chưa liên kết ví MetaMask' });
+      return res.json({ 
+        success: true, 
+        data: [], 
+        message: 'Hệ thống chưa tìm thấy địa chỉ ví MetaMask liên kết với tài khoản này.' 
+      });
     }
 
+    // 5. Truy vấn danh sách hóa đơn theo địa chỉ ví (Không phân biệt hoa/thường)
+    // Đã loại bỏ dòng const patientId bị thừa và dễ gây crash app phía trên
     const invoices = await Invoice.find({
       patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
     }).sort({ createdAt: -1 });
 
-    return res.json({ success: true, data: invoices });
+    return res.json({ 
+      success: true, 
+      data: invoices 
+    });
+
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+    console.error("Lỗi tại getMyInvoices:", error);
+    return res.status(500).json({ 
+      success: false, 
+      message: 'Lỗi hệ thống trong quá trình lấy danh sách hóa đơn', 
+      error: error.message 
+    });
   }
 };
 
