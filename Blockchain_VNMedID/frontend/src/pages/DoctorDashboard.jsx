@@ -10,7 +10,7 @@ const GRAY_TEXT = "#4A5568"
 const BORDER = "#CBD5E1"
 const BG_GLOBAL = "#F8FAFC"
 
-const BASE_URL = "http://localhost:5000/api/v1"
+const BASE_URL = "https://blockchain-vnmedid.onrender.com/api/v1"
 
 export default function DoctorDashboard() {
   const navigate = useNavigate()

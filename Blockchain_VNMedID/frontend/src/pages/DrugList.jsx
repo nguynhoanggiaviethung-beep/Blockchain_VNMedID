@@ -13,7 +13,7 @@ const DrugList = ({ index, drug, updateDrug }) => {
 
     const timer = setTimeout(async () => {
       const res = await fetch(
-        `http://localhost:5000/api/v1/gov/gov-data?keyword=${encodeURIComponent(keyword)}`,
+        `https://blockchain-vnmedid.onrender.com/api/v1/gov/gov-data?keyword=${encodeURIComponent(keyword)}`,
       );
 
       const data = await res.json();
