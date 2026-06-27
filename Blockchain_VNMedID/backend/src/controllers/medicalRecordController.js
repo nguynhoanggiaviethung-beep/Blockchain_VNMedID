@@ -279,7 +279,7 @@ const completeVisit = async (req, res) => {
 
         try {
             if (patientWalletAddress) {
-                const generatedInvoiceId = `INV-${recordId.toString().substring(16)}`;
+                const generatedInvoiceId = INV-${recordId.toString().substring(16)};
                 const prescriptionText = (huongDieuTri || "").toLowerCase();
 
                 // Khởi tạo mục đầu tiên là chi phí khám bệnh
@@ -296,11 +296,11 @@ const completeVisit = async (req, res) => {
                             drugName: drug.toUpperCase(), // Chuyển chữ hoa nhìn trực quan
                             priceVND: DRUG_PRICE_LIST[drug]
                         });
-                        console.log(`[Tính tiền] Phát hiện thuốc: ${drug} -> Cộng thêm ${DRUG_PRICE_LIST[drug]} VND`);
+                        console.log([Tính tiền] Phát hiện thuốc: ${drug} -> Cộng thêm ${DRUG_PRICE_LIST[drug]} VND);
                     }
                 });
 
-                console.log(`[Tỷ giá] Tổng hóa đơn tiền mặt: ${totalVND.toLocaleString('vi-VN')} VND`);
+                console.log([Tỷ giá] Tổng hóa đơn tiền mặt: ${totalVND.toLocaleString('vi-VN')} VND);
 
                 // Tỷ giá quy đổi ETH/VND cố định (1 ETH = 90.000.000 VND)
                 const ETH_TO_VND_RATE = 90000000;
@@ -308,7 +308,7 @@ const completeVisit = async (req, res) => {
                 totalETH = parseFloat(totalETH.toFixed(5));
                 if (totalETH === 0) totalETH = 0.001;
 
-                console.log(`[Tỷ giá] Đã quy đổi sang Web3: ${totalETH} ETH`);
+                console.log([Tỷ giá] Đã quy đổi sang Web3: ${totalETH} ETH);
 
                 // Lưu thông tin hóa đơn mới CHỨA CẢ CHI TIẾT TÊN THUỐC + GIÁ vào MongoDB
                 const autoInvoice = new Invoice({
@@ -329,7 +329,7 @@ const completeVisit = async (req, res) => {
                 const paymentTx = await paymentContract.createInvoice(generatedInvoiceId, patientWalletAddress, amountWei);
                 await paymentTx.wait();
 
-                console.log(`[Hóa đơn] Đã tạo hóa đơn chi tiết ${generatedInvoiceId} lên Blockchain thành công!`);
+                console.log([Hóa đơn] Đã tạo hóa đơn chi tiết ${generatedInvoiceId} lên Blockchain thành công!);
             }
         } catch (invoiceError) {
             console.error('❌ Lỗi hệ thống khi quy đổi và sinh hóa đơn tự động:', invoiceError.message);
@@ -353,9 +353,9 @@ const completeVisit = async (req, res) => {
                 timestamp: new Date().toISOString(),
             };
 
-            ipfsHash = await uploadJSONToIPFS(recordPayload, `vnmedid-record-${recordId}`);
+            ipfsHash = await uploadJSONToIPFS(recordPayload, vnmedid-record-${recordId});
             ipfsUrl = getIPFSGatewayUrl(ipfsHash);
-            console.log(`[IPFS] Đã upload bệnh án thành công lên IPFS: ${ipfsUrl}`);
+            console.log([IPFS] Đã upload bệnh án thành công lên IPFS: ${ipfsUrl});
         } catch (ipfsError) {
             console.error('❌ Lỗi upload IPFS:', ipfsError.message);
         }
@@ -392,11 +392,11 @@ const completeVisit = async (req, res) => {
 
             const recordHash = ethers.keccak256(ethers.toUtf8Bytes(hashSource));
 
-            console.log(`[Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey}`);
+            console.log([Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey});
             const medicalContract = getContractInstance('medicalRecord');
 
             const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0x66Bd396353701d97a7C21A23f57044761133dcD5";
-            console.log(`[Blockchain] Địa chỉ thực hiện giao dịch (Hospital/Admin): ${backendSignerAddress}`);
+            console.log([Blockchain] Địa chỉ thực hiện giao dịch (Hospital/Admin): ${backendSignerAddress});
 
             const tx = await medicalContract.addRecordHash(
                 targetPatientKey,
@@ -405,7 +405,7 @@ const completeVisit = async (req, res) => {
             );
             await tx.wait();
             recordTxHash = tx.hash;
-            console.log(`[Blockchain] Đồng bộ thành công! TxHash: ${tx.hash}`);
+            console.log([Blockchain] Đồng bộ thành công! TxHash: ${tx.hash});
         } catch (bcError) {
             console.log("========== BLOCKCHAIN ERROR ==========");
             console.log(bcError.message);
@@ -423,7 +423,7 @@ const completeVisit = async (req, res) => {
                 blockchainTxHash: recordTxHash
             });
             await medicalRecord.save();
-            console.log(`[MedicalRecord] Đã tạo bệnh án kèm txHash: ${recordTxHash}`);
+            console.log([MedicalRecord] Đã tạo bệnh án kèm txHash: ${recordTxHash});
         } catch (mrError) {
             console.error('❌ Lỗi tạo MedicalRecord:', mrError.message);
         }
@@ -454,11 +454,11 @@ const getOnChainRecord = async (req, res) => {
 
         if (patientAddress.startsWith("0x")) {
             const linkedUser = await db.collection('users').findOne({
-                walletAddress: { $regex: new RegExp(`^${patientAddress}$`, 'i') }
+                walletAddress: { $regex: new RegExp(^${patientAddress}$, 'i') }
             });
             if (linkedUser) {
                 targetContractKey = String(linkedUser._id);
-                console.log(`[Đồng bộ On-chain] Đã map địa chỉ ví sang chuỗi định danh gốc: ${targetContractKey}`);
+                console.log([Đồng bộ On-chain] Đã map địa chỉ ví sang chuỗi định danh gốc: ${targetContractKey});
             }
         }
 
@@ -478,26 +478,15 @@ const getOnChainRecord = async (req, res) => {
             });
         }
 
-        const historyList = await Promise.all(records.map(async (record, index) => {
-            const hashValue = record.recordHash || record[0];
-            const doctorWallet = record.doctorWallet || record[1];
-            const timestamp = record.createdAt ? Number(record.createdAt) : Number(record[2]);
-
-            const matchedVisit = await Visit.findOne({
-                $or: [
-                    { ipfsHash: hashValue },
-                    { patientId: targetContractKey }
-                ]
-            }).sort({ createdAt: -1 });
-            
-
-            return {
-                stt: index + 1,
-                hash: hashValue,
-                doctorWallet: doctorWallet,
-                time: new Date(timestamp * 1000).toLocaleString('vi-VN'),
-                recordTxHash: matchedVisit ? matchedVisit.recordTxHash : null
-            };
+        const historyList = visits.map((visit, index) => ({
+            stt: index + 1,
+            diagnosis: visit.chanDoanChuyenMon || '',
+            doctorName: visit.doctorName || '',
+            time: new Date(visit.updatedAt).toLocaleString('vi-VN'),
+            txHash: visit.recordTxHash || null,
+            etherscanUrl: visit.recordTxHash
+                ? https://sepolia.etherscan.io/tx/${visit.recordTxHash}
+                : null
         }));
 
         return res.status(200).json({
