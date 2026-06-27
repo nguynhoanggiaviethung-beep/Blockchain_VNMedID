@@ -23,7 +23,7 @@ const corsOptions = {
     // Cho phép tất cả origin (Linh hoạt cho môi trường dev và production Render)
     return callback(null, true);
   },
-  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  methods: ['GET', 'POST', 'PATCH', 'PUT', 'DELETE', 'OPTIONS'],
   allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With', 'Accept'],
   credentials: true,
   optionsSuccessStatus: 200 // Xử lý êm đẹp cho các trình duyệt cũ khi gửi request OPTIONS
