@@ -139,7 +139,7 @@ exports.bookAppointment = async (req, res) => {
 exports.getDoctorPendingVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
-    const doctorHospital = req.user?.hospitalName;
+    const doctorHospital = req.user?.hospitalName || req.user?.hospital;
     let { specialty, date } = req.query;
 
     if (!doctorId) {
@@ -161,11 +161,11 @@ exports.getDoctorPendingVisits = async (req, res) => {
       status: { $in: ["pending", "examining"] },
     };
 
-    if (doctorHospital) {
-      filterQuery.hospitalName = doctorHospital;
+    if (doctorHospital && doctorHospital.trim() !== "") {
+      filterQuery.hospitalName = { $regex: new RegExp(`^${doctorHospital.trim()}$`, "i") };
     }
 
-    if (specialty) {
+    if (specialty && specialty.trim() !== "") {
       filterQuery.specialty = specialty;
     }
 

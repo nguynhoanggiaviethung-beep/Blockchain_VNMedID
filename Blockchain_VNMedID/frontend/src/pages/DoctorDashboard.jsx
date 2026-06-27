@@ -266,7 +266,7 @@ export default function DoctorDashboard() {
       )
 
       if (response.data.success) {
-        alert("🎉 Đã ký số & lưu bệnh án thành công lên Blockchain!")
+        alert("🎉 Khởi tạo Mã định danh & Đồng bộ hồ sơ bệnh án lên Blockchain thành công!")
         resetForm()
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
