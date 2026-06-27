@@ -1391,7 +1391,7 @@ export default function PatientDashboard() {
                                   border: "1px solid #E5E7EB",
                                 }}
                               >
-                                Chi tiết Giao dịch
+                                Mã băm dữ liệu bệnh án gốc (IPFS/Record Hash)
                               </th>
                             </tr>
                           </thead>
@@ -1430,36 +1430,17 @@ export default function PatientDashboard() {
                                       }
                                     })()}
                                   </td>
-                                  <td style={{ padding: "10px 12px", textAlign: "center" }}>
-                                    {(() => {
-                                      // Dựa trên database của bạn, trường lưu transaction hash là recordTxHash
-                                      const tx = block.recordTxHash || block.hash;
-                                      
-                                      if (!tx) return <span style={{ color: GRAY_TEXT, fontStyle: "italic" }}>Không có mã</span>;
-                                      
-                                      return (
-                                        <a
-                                          href={`https://sepolia.etherscan.io/tx/${tx}`}
-                                          target="_blank"
-                                          rel="noopener noreferrer"
-                                          style={{
-                                            display: "inline-flex",
-                                            alignItems: "center",
-                                            gap: "4px",
-                                            background: "#16A34A", // Màu xanh lá đồng bộ hệ thống của bạn
-                                            color: "white",
-                                            padding: "6px 14px",
-                                            borderRadius: "6px",
-                                            fontSize: "12px",
-                                            fontWeight: "600",
-                                            textDecoration: "none",
-                                            boxShadow: "0 2px 4px rgba(22,163,74,0.15)",
-                                          }}
-                                        >
-                                          🔍 Etherscan
-                                        </a>
-                                      );
-                                    })()}
+                                  <td style={{ padding: "10px 12px" }}>
+                                    {/* 🌟 ĐỔI THÀNH block.hash như trong Network trả về */}
+                                    <code
+                                      style={{
+                                        color: "#16A34A",
+                                        fontWeight: 500,
+                                        wordBreak: "break-all",
+                                      }}
+                                    >
+                                      {block.hash || block.recordHash}
+                                    </code>
                                   </td>
                                 </tr>
                               ))

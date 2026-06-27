@@ -3,7 +3,6 @@ const router = express.Router();
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
 const { createInvoice, makePayment, getMyInvoices, getInvoiceById, getAllInvoices } = require('../controllers/invoiceController');
 
-router.get('/my', xacThucToken, phanQuyen('patient'), getMyInvoices);
 
 router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment); // ← LÊN TRƯỚC
 router.post('/', xacThucToken, phanQuyen('admin'), createInvoice);
