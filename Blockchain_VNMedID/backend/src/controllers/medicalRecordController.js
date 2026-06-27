@@ -463,18 +463,27 @@ const getOnChainRecord = async (req, res) => {
             });
         }
 
-        const historyList = records.map((record, index) => {
+        const historyList = await Promise.all(records.map(async (record, index) => {
             const hashValue = record.recordHash || record[0];
             const doctorWallet = record.doctorWallet || record[1];
             const timestamp = record.createdAt ? Number(record.createdAt) : Number(record[2]);
+
+            const matchedVisit = await Visit.findOne({
+                $or: [
+                    { ipfsHash: hashValue },
+                    { patientId: targetContractKey }
+                ]
+            }).sort({ createdAt: -1 });
+            
 
             return {
                 stt: index + 1,
                 hash: hashValue,
                 doctorWallet: doctorWallet,
-                time: new Date(timestamp * 1000).toLocaleString('vi-VN') // Trả ra đúng định dạng hiển thị bảng xanh lá
+                time: new Date(timestamp * 1000).toLocaleString('vi-VN'),
+                recordTxHash: matchedVisit ? matchedVisit.recordTxHash : null
             };
-        });
+        }));
 
         return res.status(200).json({
             success: true,

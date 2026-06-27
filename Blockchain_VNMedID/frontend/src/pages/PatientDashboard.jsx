@@ -1433,7 +1433,7 @@ export default function PatientDashboard() {
                                   <td style={{ padding: "10px 12px", textAlign: "center" }}>
                                     {(() => {
                                       // Dựa trên database của bạn, trường lưu transaction hash là recordTxHash
-                                      const tx = block.hash;
+                                      const tx = block.recordTxHash || block.hash;
                                       
                                       if (!tx) return <span style={{ color: GRAY_TEXT, fontStyle: "italic" }}>Không có mã</span>;
                                       
