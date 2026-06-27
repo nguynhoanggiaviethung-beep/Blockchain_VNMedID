@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import axios from 'axios';
+import FormFields from "../components/FormFields"
 
 const PRIMARY = "#0A2D6E"
 const PRIMARY_MED = "#1A4FA8"
@@ -11,13 +12,13 @@ const SUCCESS = "#16A34A"
 const SUCCESS_LIGHT = "#DCFCE7"
 const WARNING = "#D97706"
 const WARNING_LIGHT = "#FEF3C7"
-const BASE_URL = import.meta.env.VITE_API_URL || "https://blockchain-vnmedid.onrender.com/api/v1"
+const BASE_URL = import.meta.env.VITE_API_URL || "http://localhost:5000/api/v1"
 
 
 const SHIFT_MAP = {
-  morning:   { label: "Sáng",   time: "07:00 – 11:30", icon: "🌅", color: WARNING,    bg: WARNING_LIGHT },
-  afternoon: { label: "Chiều",  time: "13:00 – 17:00", icon: "☀️",  color: PRIMARY_MED, bg: PRIMARY_LIGHT },
-  evening:   { label: "Tối",    time: "17:30 – 21:00", icon: "🌙", color: "#7C3AED",   bg: "#F5F3FF" },
+  morning: { label: "Sáng", time: "07:00 – 11:30", icon: "🌅", color: WARNING, bg: WARNING_LIGHT },
+  afternoon: { label: "Chiều", time: "13:00 – 17:00", icon: "☀️", color: PRIMARY_MED, bg: PRIMARY_LIGHT },
+  evening: { label: "Tối", time: "17:30 – 21:00", icon: "🌙", color: "#7C3AED", bg: "#F5F3FF" },
 }
 
 const ShiftBadge = ({ shift }) => {
@@ -46,18 +47,18 @@ const toLocalDateString = (dateInput) => {
 
 export default function AdminSchedule() {
   const token = localStorage.getItem("token")
-  const today = new Date() 
+  const today = new Date()
 
   const [schedules, setSchedules] = useState([])
   const [doctors, setDoctors] = useState([])
   const [loading, setLoading] = useState(true)
   const [filterDoctor, setFilterDoctor] = useState("")
-  
+
   const formattedToday = toLocalDateString(today);
 
   const [filterDate, setFilterDate] = useState(formattedToday)
   const [filterShift, setFilterShift] = useState("")
-  const [viewMode, setViewMode] = useState("table") 
+  const [viewMode, setViewMode] = useState("table")
   // Modal Tự động xếp lịch (Giao diện xịn)
   const [showAuto, setShowAuto] = useState(false);
   const [autoForm, setAutoForm] = useState({ specialty: "", startDate: formattedToday });
@@ -65,7 +66,7 @@ export default function AdminSchedule() {
   // Modal tạo mới
   const [showCreate, setShowCreate] = useState(false)
   const [createForm, setCreateForm] = useState({
-    doctorId: "", date: formattedToday, shift: "morning", 
+    doctorId: "", date: formattedToday, shift: "morning",
     room: "101", note: "", status: "active", maxPatients: 9
   })
   const [creating, setCreating] = useState(false)
@@ -83,7 +84,7 @@ export default function AdminSchedule() {
     if (!shiftDate) return { label: "Không xác định", bg: "#F1F5F9", color: GRAY_TEXT, icon: "❓" };
     const checkToday = new Date();
     checkToday.setHours(0, 0, 0, 0);
-    
+
     const d = new Date(shiftDate);
     d.setHours(0, 0, 0, 0);
 
@@ -98,17 +99,17 @@ export default function AdminSchedule() {
     if (filterDoctor) params.doctorId = filterDoctor
     if (filterDate) params.date = toLocalDateString(filterDate)
     if (filterShift) params.shift = filterShift
-    
+
     axios.get(`${BASE_URL}/shifts`, {
       headers: { Authorization: `Bearer ${token}` }, params
     })
-    .then(res => {
-      // Bóc tách linh hoạt cấu trúc data trả về từ API
-      const data = res.data?.data?.schedules || res.data?.data || res.data?.shifts || res.data || [];
-      setSchedules(Array.isArray(data) ? data : []);
-    })
-    .catch(err => console.error("Lỗi fetchSchedules:", err))
-    .finally(() => setLoading(false))
+      .then(res => {
+        // Bóc tách linh hoạt cấu trúc data trả về từ API
+        const data = res.data?.data?.schedules || res.data?.data || res.data?.shifts || res.data || [];
+        setSchedules(Array.isArray(data) ? data : []);
+      })
+      .catch(err => console.error("Lỗi fetchSchedules:", err))
+      .finally(() => setLoading(false))
   }
 
   // ✅ SỬA ĐỂ KHÔNG BỊ RỖNG DOCTORS: Tự động đoán cấu trúc array của Backend
@@ -116,38 +117,38 @@ export default function AdminSchedule() {
     axios.get(`${BASE_URL}/doctors`, {
       headers: { Authorization: `Bearer ${token}` }
     })
-    .then(res => {
-      console.log("Dữ liệu bác sĩ từ API trả về:", res.data); // Xem log ở F12 xem cấu trúc trả về là gì
-      
-      let rawDocs = [];
-      if (Array.isArray(res.data)) {
-        rawDocs = res.data;
-      } else if (res.data?.data && Array.isArray(res.data.data)) {
-        rawDocs = res.data.data;
-      } else if (res.data?.data?.doctors && Array.isArray(res.data.data.doctors)) {
-        rawDocs = res.data.data.doctors;
-      } else if (res.data?.doctors && Array.isArray(res.data.doctors)) {
-        rawDocs = res.data.doctors;
-      }
+      .then(res => {
+        console.log("Dữ liệu bác sĩ từ API trả về:", res.data); // Xem log ở F12 xem cấu trúc trả về là gì
 
-      setDoctors(rawDocs);
-    })
-    .catch(err => {
-      console.error("Lỗi nghiêm trọng khi fetchDoctors:", err);
-    })
+        let rawDocs = [];
+        if (Array.isArray(res.data)) {
+          rawDocs = res.data;
+        } else if (res.data?.data && Array.isArray(res.data.data)) {
+          rawDocs = res.data.data;
+        } else if (res.data?.data?.doctors && Array.isArray(res.data.data.doctors)) {
+          rawDocs = res.data.data.doctors;
+        } else if (res.data?.doctors && Array.isArray(res.data.doctors)) {
+          rawDocs = res.data.doctors;
+        }
+
+        setDoctors(rawDocs);
+      })
+      .catch(err => {
+        console.error("Lỗi nghiêm trọng khi fetchDoctors:", err);
+      })
   }
 
-  useEffect(() => { 
-    fetchSchedules(); 
-    fetchDoctors(); 
+  useEffect(() => {
+    fetchSchedules();
+    fetchDoctors();
   }, [])
 
- // Lấy ra danh sách các chuyên khoa không trùng lặp từ data bác sĩ
+  // Lấy ra danh sách các chuyên khoa không trùng lặp từ data bác sĩ
   const uniqueSpecialties = [...new Set(doctors.map(d => d.specialty || d["Chuyên khoa"]).filter(Boolean))];
 
   const handleConfirmAutoSchedule = async () => {
     if (!autoForm.specialty) return alert("Vui lòng chọn chuyên khoa!");
-    
+
     setLoading(true);
     try {
       const response = await axios.post(`${BASE_URL}/shifts/auto-schedule`, {
@@ -157,7 +158,7 @@ export default function AdminSchedule() {
       }, {
         headers: { Authorization: `Bearer ${token}` }
       });
-      
+
       if (response.data.success) {
         alert("🎉 Kích hoạt phân ca khám tự động thành công!");
         setShowAuto(false);
@@ -200,7 +201,7 @@ export default function AdminSchedule() {
         }
 
         setBulkProgress({ current: i + 1, total: doctors.length })
-        
+
         const batchPayload = {
           doctorId: doc._id,
           date: selectedDate,
@@ -335,54 +336,6 @@ export default function AdminSchedule() {
     afternoon: schedules.filter(s => s.shift === "afternoon").length,
   }
 
-  const FormFields = ({ form, setForm, isEdit = false }) => (
-    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 14 }}>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Bác sĩ <span style={{ color: ERROR }}>*</span></label>
-        <select value={form.doctorId || ""} onChange={e => setForm({ ...form, doctorId: e.target.value })} style={inputStyle}>
-          <option value="">-- Chọn bác sĩ --</option>
-          {!isEdit && <option value="ALL_DOCTORS" style={{ fontWeight: "bold", color: PRIMARY_MED }}>🌟 TẤT CẢ BÁC SĨ</option>}
-          {doctors.map(d => (
-            <option key={d._id} value={d._id}>
-              {d.fullName || d["Họ và tên"]} {d.specialty ? `– ${d.specialty}` : ""}
-            </option>
-          ))}
-        </select>
-      </div>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ngày trực <span style={{ color: ERROR }}>*</span></label>
-        <input type="date" value={form.date || ""} onChange={e => setForm({ ...form, date: e.target.value })} style={inputStyle} />
-      </div>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ca trực</label>
-        <select value={form.shift || "morning"} onChange={e => setForm({ ...form, shift: e.target.value })} style={inputStyle}>
-          <option value="morning">🌅 Ca sáng (07:00 – 11:30)</option>
-          <option value="afternoon">☀️ Ca chiều (13:00 – 17:00)</option>
-          <option value="evening">🌙 Ca tối (17:30 – 21:00)</option>
-        </select>
-      </div>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Phòng khám</label>
-        <input type="text" value={form.room || ""} onChange={e => setForm({ ...form, room: e.target.value })} placeholder="VD: Phòng 101..." style={inputStyle} />
-      </div>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Số BN tối đa (Mỗi bác sĩ)</label>
-        <input type="number" value={form.maxPatients || ""} onChange={e => setForm({ ...form, maxPatients: e.target.value })} style={inputStyle} />
-      </div>
-      <div>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Trạng thái</label>
-        <select value={form.status || "active"} onChange={e => setForm({ ...form, status: e.target.value })} style={inputStyle}>
-          <option value="active">✅ Hoạt động</option>
-          <option value="inactive">⛔ Tạm nghỉ</option>
-          <option value="full">🔴 Đã đầy</option>
-        </select>
-      </div>
-      <div style={{ gridColumn: "1 / -1" }}>
-        <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ghi chú</label>
-        <input type="text" value={form.note || ""} onChange={e => setForm({ ...form, note: e.target.value })} placeholder="Ghi chú thêm..." style={inputStyle} />
-      </div>
-    </div>
-  )
 
   return (
     <div>
@@ -394,9 +347,9 @@ export default function AdminSchedule() {
         </div>
         <div style={{ display: "flex", gap: 10 }}>
           <button onClick={() => {
-              if (uniqueSpecialties.length > 0) setAutoForm({...autoForm, specialty: uniqueSpecialties[0]})
-              setShowAuto(true)
-            }}
+            if (uniqueSpecialties.length > 0) setAutoForm({ ...autoForm, specialty: uniqueSpecialties[0] })
+            setShowAuto(true)
+          }}
             style={{ background: "#16A34A", color: "#fff", border: "none", padding: "10px 20px", borderRadius: 10, cursor: "pointer", fontWeight: 600, fontSize: 14 }}>
             ⚡ Tự động xếp lịch
           </button>
@@ -417,10 +370,10 @@ export default function AdminSchedule() {
       {/* Stats */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: 14, marginBottom: 24 }}>
         {[
-          { label: "Tổng lịch",   value: stats.total,     icon: "📊", color: PRIMARY,     bg: PRIMARY_LIGHT },
-          { label: "Đang hoạt động", value: stats.active,  icon: "✅", color: SUCCESS,     bg: SUCCESS_LIGHT },
-          { label: "Ca sáng",     value: stats.morning,   icon: "🌅", color: WARNING,     bg: WARNING_LIGHT },
-          { label: "Ca chiều",    value: stats.afternoon, icon: "☀️",  color: PRIMARY_MED, bg: PRIMARY_LIGHT },
+          { label: "Tổng lịch", value: stats.total, icon: "📊", color: PRIMARY, bg: PRIMARY_LIGHT },
+          { label: "Đang hoạt động", value: stats.active, icon: "✅", color: SUCCESS, bg: SUCCESS_LIGHT },
+          { label: "Ca sáng", value: stats.morning, icon: "🌅", color: WARNING, bg: WARNING_LIGHT },
+          { label: "Ca chiều", value: stats.afternoon, icon: "☀️", color: PRIMARY_MED, bg: PRIMARY_LIGHT },
         ].map(s => (
           <div key={s.label} style={{ background: "#fff", borderRadius: 12, padding: "16px 20px", boxShadow: "0 2px 8px rgba(0,0,0,0.06)", display: "flex", alignItems: "center", gap: 14, border: `1px solid ${BORDER}` }}>
             <div style={{ width: 44, height: 44, borderRadius: 10, background: s.bg, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{s.icon}</div>
@@ -438,9 +391,11 @@ export default function AdminSchedule() {
           <div style={{ display: "flex", background: "#F1F5F9", borderRadius: 8, padding: 3, gap: 3 }}>
             {[{ k: "table", label: "≡ Bảng" }, { k: "week", label: "📅 Tuần" }].map(v => (
               <button key={v.k} onClick={() => setViewMode(v.k)}
-                style={{ padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
+                style={{
+                  padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", fontSize: 13, fontWeight: 600,
                   background: viewMode === v.k ? PRIMARY : "transparent",
-                  color: viewMode === v.k ? "#fff" : GRAY_TEXT }}>
+                  color: viewMode === v.k ? "#fff" : GRAY_TEXT
+                }}>
                 {v.label}
               </button>
             ))}
@@ -552,7 +507,16 @@ export default function AdminSchedule() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560 }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>📅 Tạo lịch trực mới</h3>
-            <FormFields form={createForm} setForm={setCreateForm} isEdit={false} />
+            <FormFields
+              form={createForm}
+              setForm={setCreateForm}
+              isEdit={false}
+              doctors={doctors}
+              inputStyle={inputStyle}
+              ERROR={ERROR}
+              PRIMARY_MED={PRIMARY_MED}
+              GRAY_TEXT={GRAY_TEXT}
+            />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button onClick={() => setShowCreate(false)} style={{ padding: "9px 20px", borderRadius: 8, background: "#fff" }}>Hủy</button>
               <button onClick={handleCreate} disabled={creating} style={{ padding: "9px 24px", borderRadius: 8, background: PRIMARY, color: "#fff", cursor: "pointer" }}>
@@ -568,7 +532,16 @@ export default function AdminSchedule() {
         <div style={{ position: "fixed", inset: 0, background: "rgba(0,0,0,0.45)", display: "flex", alignItems: "center", justifyContent: "center", zIndex: 50 }}>
           <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 560 }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>✏️ Chỉnh sửa lịch trực</h3>
-            <FormFields form={editForm} setForm={setEditForm} isEdit={true} />
+            <FormFields
+              form={editForm}
+              setForm={setEditForm}
+              isEdit={true}
+              doctors={doctors}
+              inputStyle={inputStyle}
+              ERROR={ERROR}
+              PRIMARY_MED={PRIMARY_MED}
+              GRAY_TEXT={GRAY_TEXT}
+            />
             <div style={{ display: "flex", gap: 10, justifyContent: "flex-end", marginTop: 24 }}>
               <button onClick={() => setEditTarget(null)} style={{ padding: "9px 20px", borderRadius: 8, background: "#fff" }}>Hủy</button>
               <button onClick={handleSave} disabled={saving} style={{ padding: "9px 24px", borderRadius: 8, background: PRIMARY, color: "#fff" }}>
@@ -586,13 +559,13 @@ export default function AdminSchedule() {
           <div style={{ background: "#fff", borderRadius: 16, padding: 32, width: 450 }}>
             <h3 style={{ color: PRIMARY, marginTop: 0 }}>⚡ Tự động phân ca</h3>
             <p style={{ color: GRAY_TEXT, fontSize: 14, marginBottom: 20 }}>Hệ thống sẽ tự động xoay vòng lịch trực cho các bác sĩ trong chuyên khoa được chọn.</p>
-            
+
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               <div>
                 <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Chọn Chuyên khoa <span style={{ color: ERROR }}>*</span></label>
-                <select 
-                  value={autoForm.specialty} 
-                  onChange={e => setAutoForm({ ...autoForm, specialty: e.target.value })} 
+                <select
+                  value={autoForm.specialty}
+                  onChange={e => setAutoForm({ ...autoForm, specialty: e.target.value })}
                   style={inputStyle}
                 >
                   {uniqueSpecialties.length === 0 && <option value="">Không có dữ liệu chuyên khoa</option>}
@@ -604,11 +577,11 @@ export default function AdminSchedule() {
 
               <div>
                 <label style={{ fontSize: 12, color: GRAY_TEXT, display: "block", marginBottom: 4 }}>Ngày bắt đầu chạy lịch <span style={{ color: ERROR }}>*</span></label>
-                <input 
-                  type="date" 
-                  value={autoForm.startDate} 
-                  onChange={e => setAutoForm({ ...autoForm, startDate: e.target.value })} 
-                  style={inputStyle} 
+                <input
+                  type="date"
+                  value={autoForm.startDate}
+                  onChange={e => setAutoForm({ ...autoForm, startDate: e.target.value })}
+                  style={inputStyle}
                 />
               </div>
             </div>
@@ -622,6 +595,6 @@ export default function AdminSchedule() {
           </div>
         </div>
       )}
-      </div>
+    </div>
   );
 }

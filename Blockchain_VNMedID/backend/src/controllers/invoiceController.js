@@ -217,3 +217,41 @@ exports.getAllInvoices = async (req, res) => {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
 };
+
+
+exports.updateInvoiceStatus = async (req, res) => {
+  try {
+    const { invoiceId, status, reason } = req.body;
+
+    if (!invoiceId || !status) {
+      return res.status(400).json({ success: false, message: 'Vui lòng cung cấp invoiceId và status' });
+    }
+
+    const allowed = ['pending', 'paid', 'failed'];
+    if (!allowed.includes(status)) {
+      return res.status(400).json({ success: false, message: `Status không hợp lệ. Chỉ chấp nhận: ${allowed.join(', ')}` });
+    }
+
+    const invoice = await Invoice.findOne({ invoiceId });
+    if (!invoice) {
+      return res.status(404).json({ success: false, message: 'Không tìm thấy hóa đơn!' });
+    }
+
+    // Không cho phép đổi trạng thái nếu đã paid (tránh gian lận)
+    if (invoice.paymentStatus === 'paid') {
+      return res.status(400).json({ success: false, message: 'Hóa đơn đã thanh toán, không thể cập nhật lại trạng thái!' });
+    }
+
+    invoice.paymentStatus = status;
+    if (reason) invoice.failReason = reason; // tuỳ chọn lưu lý do thất bại
+    await invoice.save();
+
+    return res.json({
+      success: true,
+      message: `Cập nhật trạng thái hóa đơn thành [${status}] thành công!`,
+      data: { invoiceId, paymentStatus: status }
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
+  }
+};

@@ -74,10 +74,13 @@ const invoiceSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
+    
+    failReason: { type: String, default: null }
   },
   {
     timestamps: true,
-  }
+  },
+ 
 );
 
 module.exports = mongoose.model("Invoice", invoiceSchema);
