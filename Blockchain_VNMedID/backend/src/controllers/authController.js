@@ -270,6 +270,20 @@ const saveWallet = async (req, res) => {
       { _id: userId },
       { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
     );
+    await db.collection("patients").updateOne(
+  { _id: userId },
+  { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+);
+
+// Cập nhật luôn vào doctors nếu là bác sĩ
+if (user.role === "doctor") {
+  await db.collection("doctors").updateOne(
+    { _id: userId },
+    { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+  );
+  console.log("✅ Đã cập nhật walletAddress vào doctors");
+}
+
 
     return res.status(200).json({ success: true, message: "Lưu ví thành công!", data: { walletAddress } });
   } catch (error) {
