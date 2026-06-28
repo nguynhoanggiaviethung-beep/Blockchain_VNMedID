@@ -246,7 +246,7 @@ exports.getMyAppointments = async (req, res) => {
 exports.getAllVisits = async (req, res) => {
   try {
     const { status, date, search, patientId } = req.query;
-    const { hopitalName } = req.user;
+    const { hospitalName } = req.user;
     let filter = {};
 
     if (status) filter.status = status;
@@ -266,8 +266,6 @@ exports.getAllVisits = async (req, res) => {
         { hospitalName: { $regex: search, $options: "i" } },
       ];
     }
-
-    console.log("HOSPITALNAME", hospitalName);
 
     if (hospitalName) {
       filter.hospitalName = { $regex: hospitalName, $options: "i" };

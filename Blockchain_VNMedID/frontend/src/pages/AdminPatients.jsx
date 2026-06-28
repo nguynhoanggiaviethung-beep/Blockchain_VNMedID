@@ -97,8 +97,8 @@ export default function AdminPatients() {
         </form>
       </div>
 
-      <div style={{ background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", overflow: "hidden" }}>
-        <table style={{ width: "100%", borderCollapse: "collapse" }}>
+      <div style={{ overflowX: "auto", background: "#fff", borderRadius: 14, boxShadow: "0 2px 12px rgba(0,0,0,0.07)", overflow: "hidden" }}>
+        <table style={{  borderCollapse: "collapse" }}>
           <thead>
             <tr style={{ background: PRIMARY_LIGHT }}>
               {["STT", "Họ tên", "Ngày sinh", "Giới tính", "SĐT", "CCCD", "Địa chỉ", "Thao tác"].map(h => (
