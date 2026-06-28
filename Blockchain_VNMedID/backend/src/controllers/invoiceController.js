@@ -12,6 +12,8 @@ exports.createInvoice = async (req, res) => {
   try {
     const { invoiceId, amount, patientWallet, items, totalVND } = req.body;
 
+    const {hopitalName} = request.user;
+
     if (!invoiceId || !amount || !patientWallet) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập mã hóa đơn, số tiền và ví bệnh nhân' });
     }
@@ -27,29 +29,30 @@ exports.createInvoice = async (req, res) => {
     try {
       const paymentContract = getContractInstance('payment');
       amountWei = ethers.parseEther(amount.toString());
-      
+
       // Gọi Smart Contract để tạo hóa đơn On-chain
       const tx = await paymentContract.createInvoice(invoiceId, patientWallet, amountWei);
       await tx.wait(); // Đợi block được đào xong trên Sepolia
       txHash = tx.hash;
     } catch (bcError) {
       console.error('❌ Lỗi đồng bộ blockchain thất bại:', bcError.message);
-      return res.status(500).json({ 
-        success: false, 
+      return res.status(500).json({
+        success: false,
         message: 'Không thể tạo hóa đơn trên Blockchain mạng Sepolia. Vui lòng kiểm tra số dư ví Admin hoặc Gas!',
-        error: bcError.message 
+        error: bcError.message
       });
     }
 
     // Nếu On-chain thành công mới tiến hành lưu MongoDB
-    const invoice = new Invoice({ 
-      invoiceId, 
-      amount, 
+    const invoice = new Invoice({
+      invoiceId,
+      amount,
       amountInWei: amountWei.toString(),
-      patientWallet, 
+      patientWallet,
       paymentStatus: 'pending',
       items: items || [],
       totalVND: totalVND || 0,
+      hospitalName,
       txHash: txHash // Lưu lại luôn txHash tạo hóa đơn ban đầu
     });
     await invoice.save();
@@ -59,7 +62,7 @@ exports.createInvoice = async (req, res) => {
       message: 'Tạo hóa đơn thành công và đã đồng bộ lên Blockchain!',
       data: { invoiceId: invoice.invoiceId, txHash }
     });
-    
+
   } catch (error) {
     return res.status(500).json({ success: false, message: 'Lỗi hệ thống', error: error.message });
   }
@@ -83,38 +86,38 @@ exports.makePayment = async (req, res) => {
 
     try {
       const paymentContract = getContractInstance('payment');
-      
+
       // Lấy dữ liệu Struct: [patientWallet, amount, paid] tự Blockchain Sepolia
-     const onChainData = await paymentContract.invoices(invoiceId);
-     const isPaidOnChain = onChainData.paid || onChainData[2];
+      const onChainData = await paymentContract.invoices(invoiceId);
+      const isPaidOnChain = onChainData.paid || onChainData[2];
 
 
       if (!isPaidOnChain) {
-        return res.status(400).json({ 
-          success: false, 
-          message: 'Giao dịch MetaMask thất bại hoặc trạng thái PAID chưa được cập nhật on-chain!' 
+        return res.status(400).json({
+          success: false,
+          message: 'Giao dịch MetaMask thất bại hoặc trạng thái PAID chưa được cập nhật on-chain!'
         });
       }
     } catch (bcError) {
       console.error('❌ Lỗi xác thực Blockchain:', bcError.message);
-      return res.status(500).json({ 
-        success: false, 
-        message: 'Server Backend lỗi kết nối hoặc không thể đồng bộ với mạng Sepolia!', 
-        error: bcError.message 
+      return res.status(500).json({
+        success: false,
+        message: 'Server Backend lỗi kết nối hoặc không thể đồng bộ với mạng Sepolia!',
+        error: bcError.message
       });
     }
 
     // Nếu on-chain xác thực đúng là đã thanh toán -> Tiến hành cập nhật DB
     invoice.txHash = txHash;
     invoice.paymentStatus = 'paid';
-    
+
     // Cập nhật ví thực tế thanh toán (chuyển về dạng lowercase để đồng bộ)
     if (senderWallet) {
       invoice.patientWallet = senderWallet.toLowerCase();
     } else if (req.body.patientWallet) {
       invoice.patientWallet = req.body.patientWallet.toLowerCase();
     }
-    
+
     await invoice.save();
 
     return res.status(200).json({
@@ -133,7 +136,7 @@ exports.makePayment = async (req, res) => {
 exports.getMyInvoices = async (req, res) => {
   try {
     const db = mongoose.connection.db;
-    
+
     // 1. Lấy userId từ tất cả các vị trí có thể có của Middleware gán vào
     const userId = req.userId || req.user?.id || req.user?.userId;
     let patientWallet = null;
@@ -144,7 +147,7 @@ exports.getMyInvoices = async (req, res) => {
         // Kiểm tra hợp lệ và chuyển đổi sang ObjectId chuẩn mã nguồn MongoDB
         const isObjectId = mongoose.Types.ObjectId.isValid(userId);
         const objId = isObjectId ? new mongoose.Types.ObjectId(userId.toString()) : userId;
-        
+
         const user = await db.collection('users').findOne({ _id: objId });
         patientWallet = user?.walletAddress || null;
       } catch (dbErr) {
@@ -159,10 +162,10 @@ exports.getMyInvoices = async (req, res) => {
 
     // 4. Nếu cuối cùng vẫn không xác định được ví, trả về mảng rỗng thay vì báo lỗi hệ thống
     if (!patientWallet) {
-      return res.json({ 
-        success: true, 
-        data: [], 
-        message: 'Hệ thống chưa tìm thấy địa chỉ ví MetaMask liên kết với tài khoản này.' 
+      return res.json({
+        success: true,
+        data: [],
+        message: 'Hệ thống chưa tìm thấy địa chỉ ví MetaMask liên kết với tài khoản này.'
       });
     }
 
@@ -172,17 +175,17 @@ exports.getMyInvoices = async (req, res) => {
       patientWallet: { $regex: new RegExp(`^${patientWallet}$`, 'i') }
     }).sort({ createdAt: -1 });
 
-    return res.json({ 
-      success: true, 
-      data: invoices 
+    return res.json({
+      success: true,
+      data: invoices
     });
 
   } catch (error) {
     console.error("Lỗi tại getMyInvoices:", error);
-    return res.status(500).json({ 
-      success: false, 
-      message: 'Lỗi hệ thống trong quá trình lấy danh sách hóa đơn', 
-      error: error.message 
+    return res.status(500).json({
+      success: false,
+      message: 'Lỗi hệ thống trong quá trình lấy danh sách hóa đơn',
+      error: error.message
     });
   }
 };
@@ -192,8 +195,8 @@ exports.getMyInvoices = async (req, res) => {
 // =========================================================================
 exports.getInvoiceById = async (req, res) => {
   try {
-    const { id } = req.params; 
-    
+    const { id } = req.params;
+
     const invoice = await Invoice.findOne({
       $or: [
         { invoiceId: id },
@@ -214,9 +217,16 @@ exports.getInvoiceById = async (req, res) => {
 // invoiceController.js
 exports.getAllInvoices = async (req, res) => {
   try {
+    const { hospitalName } = req.user;
+    console.log("HOSPITALNAME", hospitalName);
     const User = require('../models/User');
-    
-    const invoices = await Invoice.find({}).sort({ createdAt: -1 }).lean();
+    let filter = {};
+
+    if (hospitalName) {
+      filter.hospitalName = { $regex: hospitalName, $options: "i" };
+    }
+
+    const invoices = await Invoice.find(filter).sort({ createdAt: -1 }).lean();
 
     // Lấy toàn bộ walletAddress duy nhất từ các hóa đơn
     const wallets = [...new Set(invoices.map(inv => inv.patientWallet).filter(Boolean))];

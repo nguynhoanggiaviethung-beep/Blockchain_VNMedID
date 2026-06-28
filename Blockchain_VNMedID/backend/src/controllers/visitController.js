@@ -246,6 +246,7 @@ exports.getMyAppointments = async (req, res) => {
 exports.getAllVisits = async (req, res) => {
   try {
     const { status, date, search, patientId } = req.query;
+    const { hopitalName } = req.user;
     let filter = {};
 
     if (status) filter.status = status;
@@ -255,7 +256,7 @@ exports.getAllVisits = async (req, res) => {
         ? new mongoose.Types.ObjectId(patientId)
         : patientId;
     }
-    
+
     if (search) {
       filter.$or = [
         { patientName: { $regex: search, $options: "i" } },
@@ -264,6 +265,12 @@ exports.getAllVisits = async (req, res) => {
         { patientId: { $regex: search, $options: "i" } },
         { hospitalName: { $regex: search, $options: "i" } },
       ];
+    }
+
+    console.log("HOSPITALNAME", hospitalName);
+
+    if (hospitalName) {
+      filter.hospitalName = { $regex: hospitalName, $options: "i" };
     }
 
     const visits = await Visit.find(filter)
@@ -384,13 +391,13 @@ exports.updateVisit = async (req, res) => {
         const hashSource = ipfsHash
           ? JSON.stringify({ recordId: id, ipfsHash })
           : JSON.stringify({
-              recordId: id,
-              diagnose: finalDiagnose,
-              prescription: finalPrescription,
-              doctorName,
-              prescribedDrugs: drugsWithPrice,
-              totalVND,
-            });
+            recordId: id,
+            diagnose: finalDiagnose,
+            prescription: finalPrescription,
+            doctorName,
+            prescribedDrugs: drugsWithPrice,
+            totalVND,
+          });
 
         const recordHash = ethers.keccak256(ethers.toUtf8Bytes(hashSource));
 
@@ -454,7 +461,7 @@ exports.updateVisit = async (req, res) => {
 
         try {
           patientObjectId = new mongoose.Types.ObjectId(updated.patientId);
-        } catch (_) {}
+        } catch (_) { }
 
         const patientUser = await db.collection("users").findOne({
           $or: [{ _id: patientObjectId }, { _id: updated.patientId }],
@@ -474,6 +481,7 @@ exports.updateVisit = async (req, res) => {
             amount: amountETH,
             patientWallet: patientUser.walletAddress,
             paymentStatus: "pending",
+            hospitalName: hospitalName,
             items: drugsWithPrice,
             totalVND,
           });
@@ -610,21 +618,21 @@ exports.getDoctorCompletedVisits = async (req, res) => {
 
     let filterQuery = {}
 
-if (patientId) {
-  // Xem toàn bộ lịch sử bệnh án của bệnh nhân (tất cả bác sĩ)
-  filterQuery = {
-    status: "completed",
-    patientId: mongoose.Types.ObjectId.isValid(patientId)
-      ? new mongoose.Types.ObjectId(patientId)
-      : patientId
-  }
-} else {
-  // Không có patientId → lấy danh sách của bác sĩ đang đăng nhập
-  filterQuery = {
-    doctorId: { $in: idConditions },
-    status: "completed",
-  }
-}
+    if (patientId) {
+      // Xem toàn bộ lịch sử bệnh án của bệnh nhân (tất cả bác sĩ)
+      filterQuery = {
+        status: "completed",
+        patientId: mongoose.Types.ObjectId.isValid(patientId)
+          ? new mongoose.Types.ObjectId(patientId)
+          : patientId
+      }
+    } else {
+      // Không có patientId → lấy danh sách của bác sĩ đang đăng nhập
+      filterQuery = {
+        doctorId: { $in: idConditions },
+        status: "completed",
+      }
+    }
 
     if (date && date.trim() !== "") {
       try {
@@ -635,7 +643,7 @@ if (patientId) {
           const day = String(parsedDate.getDate()).padStart(2, "0");
           filterQuery.appointmentDate = `${year}-${month}-${day}`;
         }
-      } catch (e) {}
+      } catch (e) { }
     }
 
     const visits = await Visit.find(filterQuery)

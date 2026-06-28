@@ -74,13 +74,15 @@ const invoiceSchema = new mongoose.Schema(
       type: Number,
       default: 0,
     },
-    
+
+    hospitalName: { type: String, default: "" },
+
     failReason: { type: String, default: null }
   },
   {
     timestamps: true,
   },
- 
+
 );
 
 module.exports = mongoose.model("Invoice", invoiceSchema);
