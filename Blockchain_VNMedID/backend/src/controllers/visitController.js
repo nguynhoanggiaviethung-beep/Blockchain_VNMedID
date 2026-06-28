@@ -245,12 +245,17 @@ exports.getMyAppointments = async (req, res) => {
 // ─── ADMIN: LẤY TẤT CẢ LƯỢT KHÁM ───────────────────────────────────────────
 exports.getAllVisits = async (req, res) => {
   try {
-    const { status, date, search } = req.query;
+    const { status, date, search, patientId } = req.query;
     let filter = {};
 
     if (status) filter.status = status;
     if (date) filter.appointmentDate = date;
-
+    if (patientId) {
+      filter.patientId = mongoose.Types.ObjectId.isValid(patientId)
+        ? new mongoose.Types.ObjectId(patientId)
+        : patientId;
+    }
+    
     if (search) {
       filter.$or = [
         { patientName: { $regex: search, $options: "i" } },
@@ -390,6 +395,8 @@ exports.updateVisit = async (req, res) => {
         const recordHash = ethers.keccak256(ethers.toUtf8Bytes(hashSource));
 
         const medicalContract = getContractInstance("medicalRecord");
+        console.log('[DEBUG] targetPatientKey truyen len contract:', targetPatientKey);
+        console.log('[DEBUG] patientId goc:', existingVisit.patientId);
 
         const tx = await medicalContract.addRecordHash(
           targetPatientKey,
@@ -584,7 +591,8 @@ exports.assignDoctor = async (req, res) => {
 exports.getDoctorCompletedVisits = async (req, res) => {
   try {
     const doctorId = req.user?.userId;
-    let { date } = req.query;
+    let { date, patientId } = req.query;
+
 
     if (!doctorId) {
       return res.status(401).json({
@@ -600,10 +608,23 @@ exports.getDoctorCompletedVisits = async (req, res) => {
     idConditions.push(doctorId);
     idConditions.push(String(doctorId));
 
-    const filterQuery = {
-      doctorId: { $in: idConditions },
-      status: "completed",
-    };
+    let filterQuery = {}
+
+if (patientId) {
+  // Xem toàn bộ lịch sử bệnh án của bệnh nhân (tất cả bác sĩ)
+  filterQuery = {
+    status: "completed",
+    patientId: mongoose.Types.ObjectId.isValid(patientId)
+      ? new mongoose.Types.ObjectId(patientId)
+      : patientId
+  }
+} else {
+  // Không có patientId → lấy danh sách của bác sĩ đang đăng nhập
+  filterQuery = {
+    doctorId: { $in: idConditions },
+    status: "completed",
+  }
+}
 
     if (date && date.trim() !== "") {
       try {

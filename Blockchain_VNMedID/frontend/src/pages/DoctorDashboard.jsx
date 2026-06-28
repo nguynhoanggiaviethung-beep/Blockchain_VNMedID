@@ -56,11 +56,7 @@ export default function DoctorDashboard() {
   const token = localStorage.getItem('token')
   const userId = localStorage.getItem('userId')
 
-  fetch(`https://blockchain-vnmedid.onrender.com/api/v1/visits?status=completed&doctorId=${userId}`, {
-  headers: { Authorization: `Bearer ${token}` }
-  })
-  .then(r => r.json())
-  .then(d => console.log("KẾT QUẢ doctorId:", d))
+
 
   const fetchPatients = useCallback(async (specialtyName, dateQuery) => {
     try {
@@ -146,14 +142,17 @@ export default function DoctorDashboard() {
       
       setLoadingHistory(true)
       try {
-        const targetId = selectedPatient.patientId || selectedPatient.userId || selectedPatient._id
-        const res = await axiosOriginal.get(`${BASE_URL}/visits`, {
-          headers: { Authorization: `Bearer ${token}` },
-          params: { status: 'completed', patientId: targetId }
-        })
+        const targetId = String(selectedPatient.patientId || selectedPatient.userId || selectedPatient._id)
+        console.log('[DEBUG] targetId:', targetId, 'selectedPatient:', selectedPatient)
+        const res = await axiosOriginal.get(`${BASE_URL}/visits/completed-doctor`, {
+           headers: { Authorization: `Bearer ${token}` },
+            params: { patientId: targetId }
+})
+
         
         if (res.data?.success && res.data?.data) {
-          const records = res.data.data.records || res.data.data
+          const records = res.data.data
+          
           setBlockchainRecords(Array.isArray(records) ? records : [])
         }
       } catch (error) {

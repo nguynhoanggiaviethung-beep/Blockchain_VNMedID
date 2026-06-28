@@ -459,6 +459,8 @@ const getOnChainRecord = async (req, res) => {
                 console.log(`[Đồng bộ On-chain] Đã map địa chỉ ví sang chuỗi định danh gốc: ${targetContractKey}`);
             }
         }
+        console.log('[DEBUG] patientAddress nhan duoc:', patientAddress);
+        console.log('[DEBUG] targetContractKey sau map:', targetContractKey);
 
         const visits = await Visit.find({
             patientId: mongoose.Types.ObjectId.isValid(targetContractKey)
@@ -468,6 +470,8 @@ const getOnChainRecord = async (req, res) => {
             .sort({ createdAt: 1 })
             .select('recordTxHash chanDoanChuyenMon doctorName updatedAt')
             .lean();
+        console.log('[DEBUG] So luong visit tim duoc:', visits.length);
+        visits.forEach(v => console.log('[DEBUG] Visit patientId:', v.patientId));
 
         if (!visits.length) {
             return res.status(200).json({
