@@ -1037,7 +1037,7 @@ export default function PatientDashboard() {
                         {activeStatFilter === "donThuoc" &&
                           "💊 Chi tiết các đơn thuốc được cấp phát"}
                         {activeStatFilter === "all" &&
-                          "📜 Bản ghi lịch sử y khoa tổng hợp (MongoDB DB)"}
+                          "Lịch sử khám"}
                       </h4>
                       {activeStatFilter !== "all" && (
                         <button
@@ -1109,6 +1109,7 @@ export default function PatientDashboard() {
                               <div
                                 style={{
                                   display: "flex",
+                                  color: "#000000",
                                   justifyContent: "space-between",
                                   marginBottom: 12,
                                   borderBottom: `1px solid ${BORDER}`,
