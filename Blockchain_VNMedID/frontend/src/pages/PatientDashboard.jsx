@@ -1674,7 +1674,7 @@ export default function PatientDashboard() {
               ) : invoiceList.length === 0 ? (
                 <div
                   style={{
-                    background: "#F8FAFC",
+                    background: "rgb(194, 225, 255)",
                     padding: "16px",
                     borderRadius: 8,
                     color: PRIMARY_MED,
