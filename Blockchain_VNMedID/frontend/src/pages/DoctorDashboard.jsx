@@ -265,7 +265,7 @@ export default function DoctorDashboard() {
       )
 
       if (response.data.success) {
-        alert("🎉 Khởi tạo Mã định danh & Đồng bộ hồ sơ bệnh án lên Blockchain thành công!")
+        alert("🎉 Lưu hồ sơ bệnh án thành công!")
         resetForm()
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
@@ -288,7 +288,7 @@ export default function DoctorDashboard() {
       <div style={{ background: PRIMARY, color: "#fff", padding: "16px 32px", display: "flex", justifyContent: "space-between", alignItems: "center", boxShadow: "0 2px 10px rgba(0,0,0,0.1)" }}>
         <div style={{ fontWeight: 700, fontSize: 19, display: "flex", alignItems: "center", gap: 10 }}>
           <span>🏥 {doctorInfo.hospitalName}</span>
-          <span style={{ fontSize: 12, background: "rgba(255,255,255,0.18)", padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}>Portal Bác sĩ</span>
+          <span style={{ fontSize: 12, background: "rgba(255,255,255,0.18)", padding: "3px 10px", borderRadius: 6, fontWeight: 500 }}></span>
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 20 }}>
           <span style={{ fontSize: 14, fontWeight: 500 }}>🩺 BS. {doctorInfo.fullName}</span>
@@ -661,7 +661,7 @@ export default function DoctorDashboard() {
 
                 <div style={{ display: "flex", justifyContent: "flex-end", borderTop: "1px solid #F1F5F9", paddingTop: 20 }}>
                   <button onClick={handleCompletePrescription} disabled={submitting} style={{ background: "#10B981", color: "#fff", border: "none", padding: "12px 36px", borderRadius: 8, cursor: "pointer", fontSize: 14, fontWeight: 700 }}>
-                    {submitting ? "Đang lưu..." : "💾 KÝ SỐ & HOÀN THÀNH CA KHÁM"}
+                    {submitting ? "Đang lưu..." : "HOÀN THÀNH CA KHÁM"}
                   </button>
                 </div>
               </>
