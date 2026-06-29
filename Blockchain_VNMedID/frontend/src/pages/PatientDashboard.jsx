@@ -1700,7 +1700,7 @@ export default function PatientDashboard() {
                       <div
                         key={invoice._id}
                         style={{
-                          background: "#bbd7ff",
+                          background: "#f0f6ff",
                           borderRadius: 10,
                           padding: "20px",
                           border: `1px solid ${BORDER}`,
