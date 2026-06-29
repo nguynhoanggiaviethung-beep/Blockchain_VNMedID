@@ -1700,7 +1700,7 @@ export default function PatientDashboard() {
                       <div
                         key={invoice._id}
                         style={{
-                          background: "#a8d1fb",
+                          background: "#ffffff",
                           borderRadius: 10,
                           padding: "20px",
                           border: `1px solid ${BORDER}`,
@@ -1723,7 +1723,7 @@ export default function PatientDashboard() {
                           >
                             <div>
                               <strong>Mã số hóa đơn:</strong>{" "}
-                              <code style={{ color: PRIMARY_MED, fontWeight: 600 }}>
+                              <code style={{ color: PRIMARY_LIGHT, fontWeight: 600, background: "transparent" }}>
                                 {invoice.invoiceId}
                               </code>
                             </div>
@@ -1736,7 +1736,7 @@ export default function PatientDashboard() {
 
                             <div>
                               <strong>Cơ sở bệnh viện ban hành:</strong>{" "}
-                              {invoice.hospitalName || "VNmedID Network"}
+                              {invoice.hospitalName || "VNmedID"}
                             </div>
 
                             <div>
