@@ -307,6 +307,9 @@ export default function DoctorDashboard() {
       if (response.data.success) {
         alert("🎉 Lưu hồ sơ bệnh án thành công!")
         resetForm()
+        setSelectedPatient(null) // Xóa bệnh nhân đang chọn để đóng khung nhập đơn thuốc
+        localStorage.removeItem("current_exam_patient") // Xóa cache local storage ca cũ
+        localStorage.removeItem("current_exam_access_status")
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
     } catch  {
