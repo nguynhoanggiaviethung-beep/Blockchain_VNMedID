@@ -405,7 +405,7 @@ exports.updateVisit = async (req, res) => {
 
         const tx = await medicalContract.addRecordHash(
           targetPatientKey,
-          "0xD2db8cea80bFA1f536FaFDfe52f7d6404b21c586",
+          "0xeD8F3cA220C85Bd7976fB0136f72B6b5aB3CB85c",
           recordHash,
         );
 
