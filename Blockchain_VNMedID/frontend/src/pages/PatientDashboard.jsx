@@ -1704,6 +1704,7 @@ export default function PatientDashboard() {
                           borderRadius: 10,
                           padding: "20px",
                           border: `1px solid ${BORDER}`,
+                          color: "#000000",
                         }}
                       >
                         <div
@@ -2031,6 +2032,7 @@ export default function PatientDashboard() {
                       key={req._id}
                       style={{
                         background: "#F8FAFC",
+                        color: "#000000",
                         borderRadius: 10,
                         padding: "20px",
                         border: `1px solid ${BORDER}`,
