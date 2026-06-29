@@ -765,7 +765,7 @@ export default function PatientDashboard() {
       <div style={{ padding: "32px" }}>
         <div style={{ marginBottom: 28 }}>
           <h2 style={{ color: PRIMARY, margin: 0 }}>
-            Xin chào bệnh nhân, {fullName} 👋
+            Xin chào bệnh nhân {fullName} 👋
           </h2>
         </div>
 
