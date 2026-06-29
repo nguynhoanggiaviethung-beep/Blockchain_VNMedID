@@ -2070,7 +2070,7 @@ export default function PatientDashboard() {
                           </span>
                         </div>
                         <div>
-                          <strong>Định danh ví Web3 Bác sĩ:</strong>{" "}
+                          <strong>Địa chỉ ví của Bác sĩ:</strong>{" "}
                           <code
                             style={{
                               background: "#E5E7EB",
