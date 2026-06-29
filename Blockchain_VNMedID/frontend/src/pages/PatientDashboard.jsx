@@ -5,6 +5,7 @@ import locale from "antd/es/date-picker/locale/vi_VN";
 import dayjs from "dayjs";
 import "dayjs/locale/vi";
 import axios from "axios";
+import { ethers } from "ethers";
 
 dayjs.locale("vi");
 
@@ -368,20 +369,12 @@ export default function PatientDashboard() {
 
       const amountHex = "0x" + amountWei.toString(16);
 
-      const selector = "7c9495b2"; // ← thay bằng kết quả thực
-      const strBytes = Array.from(new TextEncoder().encode(invoice.invoiceId));
-      const strHex = strBytes
-        .map((b) => b.toString(16).padStart(2, "0"))
-        .join("");
-
-      const offsetPart =
-        "0000000000000000000000000000000000000000000000000000000000000020";
-      const lengthPart = strBytes.length.toString(16).padStart(64, "0");
-      const targetLength = Math.ceil(strHex.length / 64) * 64 || 64;
-      const contentPart = strHex.padEnd(targetLength, "0");
-
-      const finalCalldata =
-        "0x" + selector + offsetPart + lengthPart + contentPart;
+      const paymentInterface = new ethers.utils.Interface([
+        "function payInvoice(string invoiceId) payable",
+      ]);
+      const finalCalldata = paymentInterface.encodeFunctionData("payInvoice", [
+        invoice.invoiceId,
+      ]);
 
       paymentRequestStarted = true;
       const txHash = await window.ethereum.request({
@@ -1301,7 +1294,7 @@ export default function PatientDashboard() {
                         gap: 8,
                       }}
                     >
-                       HỒ SƠ BỆNH ÁN
+                      HỒ SƠ BỆNH ÁN
                     </h4>
                     <p
                       style={{
@@ -1859,15 +1852,45 @@ export default function PatientDashboard() {
                               >
                                 ✓ Đã thanh toán
                               </span>
+                            ) : invoice.paymentStatus === "failed" ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 8, alignItems: "flex-end" }}>
+                                <span
+                                  style={{
+                                    background: "#FEE2E2",
+                                    color: "#991B1B",
+                                    padding: "6px 14px",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  ❌ Thanh toán thất bại
+                                </span>
+                                <button
+                                  onClick={() => handlePayWithMetaMask(invoice)}
+                                  disabled={payingId !== null}
+                                  style={{
+                                    background: payingId === invoice.invoiceId ? GRAY_TEXT : "#DC2626",
+                                    color: WHITE,
+                                    border: "none",
+                                    padding: "10px 20px",
+                                    borderRadius: 8,
+                                    fontWeight: 600,
+                                    cursor: "pointer",
+                                    fontSize: 13,
+                                  }}
+                                >
+                                  {payingId === invoice.invoiceId
+                                    ? "🔄 Đang xử lý ký..."
+                                    : "🔁 Thanh toán lại"}
+                                </button>
+                              </div>
                             ) : (
                               <button
                                 onClick={() => handlePayWithMetaMask(invoice)}
                                 disabled={payingId !== null}
                                 style={{
-                                  background:
-                                    payingId === invoice.invoiceId
-                                      ? GRAY_TEXT
-                                      : "#10B981",
+                                  background: payingId === invoice.invoiceId ? GRAY_TEXT : "#10B981",
                                   color: WHITE,
                                   border: "none",
                                   padding: "10px 20px",
