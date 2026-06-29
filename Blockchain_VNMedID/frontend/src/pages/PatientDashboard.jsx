@@ -740,10 +740,10 @@ export default function PatientDashboard() {
         }}
       >
         <div style={{ fontWeight: 700, fontSize: 18 }}>
-          🏥 Hệ thống VNmedID — Cổng Bệnh nhân
+          Hệ thống VNmedID - Cổng Bệnh nhân
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 16 }}>
-          <span style={{ fontSize: 14 }}>👤 Tài khoản: {fullName}</span>
+          <span style={{ fontSize: 14 }}> Tài khoản: {fullName}</span>
           <button
             onClick={handleLogout}
             style={{
@@ -767,10 +767,6 @@ export default function PatientDashboard() {
           <h2 style={{ color: PRIMARY, margin: 0 }}>
             Xin chào bệnh nhân, {fullName} 👋
           </h2>
-          <p style={{ color: GRAY_TEXT, marginTop: 4 }}>
-            Trang tổng hợp hồ sơ bệnh án cá nhân, hóa đơn dịch vụ tích hợp dữ
-            liệu On-chain tối mật.
-          </p>
         </div>
 
         {/* Khối Thống Kê Tổng Hợp */}
@@ -1137,8 +1133,6 @@ export default function PatientDashboard() {
                                       padding: "2px 10px",
                                       borderRadius: 20,
                                       fontWeight: 600,
-                                      // 🌟 Logic màu sắc lồng nhau (Ternary operator)
-                                      // [lite: completed -> xanh lá] [lite: examining -> xanh dương] [lite: pending -> vàng]
                                       background:
                                         record.status === "completed"
                                           ? "#D1FAE5"
@@ -1164,7 +1158,7 @@ export default function PatientDashboard() {
                                   <span
                                     style={{
                                       fontSize: 13,
-                                      color: GRAY_TEXT,
+                                      color: PRIMARY,
                                       fontWeight: 500,
                                     }}
                                   >
@@ -1227,7 +1221,7 @@ export default function PatientDashboard() {
                                         border: `1px solid ${BORDER}`,
                                         marginTop: 6,
                                         fontSize: 13,
-                                        color: "#1E293B",
+                                        color: PRIMARY_MED,
                                       }}
                                     >
                                       <strong style={{ color: PRIMARY_MED }}>
@@ -1264,15 +1258,15 @@ export default function PatientDashboard() {
                         gap: 8,
                       }}
                     >
-                      🔗 BẢN GHI CHỨNG THỰC BỆNH ÁN BẤT BIẾN ON-CHAIN (SEPOLIA
-                      NETWORK)
+                       HỒ SƠ BỆNH ÁN
                     </h4>
                     <p
                       style={{
-                        fontSize: 13,
-                        color: GRAY_TEXT,
+                        fontSize: 20,
+                        color: PRIMARY,
                         marginTop: 0,
                         marginBottom: 16,
+                        alignItems: "center"
                       }}
                     >
                       Dữ liệu băm mật mã học (Record Hash) được trích xuất thời
@@ -1345,7 +1339,7 @@ export default function PatientDashboard() {
                             </strong>{" "}
                             <code
                               style={{
-                                background: "#F3F4F6",
+                                background: "#0047d4",
                                 padding: "2px 6px",
                                 borderRadius: 4,
                               }}
@@ -1360,7 +1354,7 @@ export default function PatientDashboard() {
                             </strong>{" "}
                             <code
                               style={{
-                                background: "#F3F4F6",
+                                background: "#0047d4",
                                 padding: "2px 6px",
                                 borderRadius: 4,
                               }}
@@ -1486,7 +1480,7 @@ export default function PatientDashboard() {
                                   style={{
                                     padding: "20px",
                                     textAlign: "center",
-                                    color: GRAY_TEXT,
+                                    color: PRIMARY_MED,
                                   }}
                                 >
                                   Chưa có lịch sử chứng thực on-chain nào.
@@ -1673,7 +1667,7 @@ export default function PatientDashboard() {
             {tab === "invoice" &&
               (loadingInvoice ? (
                 <div
-                  style={{ textAlign: "center", padding: 20, color: GRAY_TEXT }}
+                  style={{ textAlign: "center", padding: 20, color: PRIMARY_MED }}
                 >
                   Đang kết nối hệ thống kế toán...
                 </div>
@@ -1683,7 +1677,7 @@ export default function PatientDashboard() {
                     background: "#F8FAFC",
                     padding: "16px",
                     borderRadius: 8,
-                    color: GRAY_TEXT,
+                    color: PRIMARY_MED,
                     fontSize: 13,
                     fontStyle: "italic",
                     border: `1px solid ${BORDER}`,
@@ -1706,7 +1700,7 @@ export default function PatientDashboard() {
                       <div
                         key={invoice._id}
                         style={{
-                          background: "#F8FAFC",
+                          background: "#a8d1fb",
                           borderRadius: 10,
                           padding: "20px",
                           border: `1px solid ${BORDER}`,
@@ -1729,7 +1723,7 @@ export default function PatientDashboard() {
                           >
                             <div>
                               <strong>Mã số hóa đơn:</strong>{" "}
-                              <code style={{ color: PRIMARY, fontWeight: 600 }}>
+                              <code style={{ color: PRIMARY_MED, fontWeight: 600 }}>
                                 {invoice.invoiceId}
                               </code>
                             </div>
@@ -1860,7 +1854,7 @@ export default function PatientDashboard() {
                             <h5
                               style={{ margin: "0 0 12px 0", color: PRIMARY }}
                             >
-                              Chi tiết thuốc / vật tư y tế
+                              Chi tiết hóa đơn
                             </h5>
 
                             {invoice.items?.length > 0 ? (
@@ -1987,7 +1981,7 @@ export default function PatientDashboard() {
                             ) : (
                               <div
                                 style={{
-                                  color: GRAY_TEXT,
+                                  color: PRIMARY,
                                   fontStyle: "italic",
                                 }}
                               >
@@ -2030,7 +2024,7 @@ export default function PatientDashboard() {
                   style={{ display: "flex", flexDirection: "column", gap: 16 }}
                 >
                   <h4 style={{ color: PRIMARY, margin: "0 0 4px 0" }}>
-                    Danh sách yêu cầu phê duyệt hồ sơ từ chuyên gia khám
+                    Danh sách yêu cầu phê duyệt hồ sơ từ bác sĩ khám
                   </h4>
                   {accessRequests.map((req) => (
                     <div
@@ -2059,12 +2053,12 @@ export default function PatientDashboard() {
                         </div>
                         <div>
                           <strong>Cơ sở y khoa công tác:</strong>{" "}
-                          {req.hospitalName || "Cơ sở liên kết mạng lưới"}
+                          {req.hospitalName || "Cơ sở y tế"}
                         </div>
                         <div>
                           <strong>Lý do xin cấp quyền:</strong>{" "}
                           <span
-                            style={{ color: GRAY_TEXT, fontStyle: "italic" }}
+                            style={{ color: PRIMARY, fontStyle: "italic" }}
                           >
                             "
                             {req.reason ||
@@ -2143,7 +2137,7 @@ export default function PatientDashboard() {
                           <span
                             style={{
                               background: "#FEE2E2",
-                              color: "#991B1B",
+                              color: "#ff5656",
                               padding: "6px 16px",
                               borderRadius: 8,
                               fontWeight: 600,
@@ -2184,8 +2178,8 @@ export default function PatientDashboard() {
                             }}
                           >
                             {approvingId === req._id
-                              ? "✍️ Đang ký mật mã..."
-                              : "✍️ Ký số Duyệt quyền"}
+                              ? "Đang ký mật mã..."
+                              : "Ký số Duyệt quyền"}
                           </button>
                         )}
                       </div>
@@ -2198,7 +2192,7 @@ export default function PatientDashboard() {
             {tab === "edit" && (
               <div style={{ maxWidth: 600 }}>
                 <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>
-                  Thay đổi thông tin hành chính cá nhân
+                  Thông tin cá nhân
                 </h4>
                 <div
                   style={{
@@ -2296,7 +2290,7 @@ export default function PatientDashboard() {
                 >
                   {saving
                     ? "Đang đồng bộ cơ sở dữ liệu..."
-                    : "Lưu thay đổi hồ sơ hành chính"}
+                    : "Lưu thay đổi thông tin cá nhân"}
                 </button>
               </div>
             )}
@@ -2305,7 +2299,7 @@ export default function PatientDashboard() {
             {tab === "health" && (
               <div style={{ maxWidth: 600 }}>
                 <h4 style={{ color: PRIMARY, marginTop: 0, marginBottom: 20 }}>
-                  Cập nhật bổ sung chỉ số trạng thái y sinh
+                  Cập nhật bổ sung chỉ số trạng thái sức khỏe
                 </h4>
                 <div
                   style={{
@@ -2414,7 +2408,7 @@ export default function PatientDashboard() {
                   }}
                 >
                   {saving
-                    ? "Đang cập nhật hồ sơ y tế ngầm..."
+                    ? "Đang cập nhật hồ sơ y tế ..."
                     : "Xác nhận cập nhật dữ liệu trạng thái sức khỏe"}
                 </button>
               </div>
