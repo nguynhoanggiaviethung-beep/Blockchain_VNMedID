@@ -2053,7 +2053,7 @@ export default function PatientDashboard() {
                         </div>
                         <div>
                           <strong>Cơ sở y khoa công tác:</strong>{" "}
-                          {req.hospitalName || "Cơ sở y tế"}
+                          {req.doctor?.hospitalName || "Cơ sở y tế"}
                         </div>
                         <div>
                           <strong>Lý do xin cấp quyền:</strong>{" "}
