@@ -1700,7 +1700,7 @@ export default function PatientDashboard() {
                       <div
                         key={invoice._id}
                         style={{
-                          background: "#0533ff",
+                          background: "#dce2ff",
                           borderRadius: 10,
                           padding: "20px",
                           border: `1px solid ${BORDER}`,
@@ -1723,7 +1723,7 @@ export default function PatientDashboard() {
                           >
                             <div>
                               <strong>Mã số hóa đơn:</strong>{" "}
-                              <code style={{ color: PRIMARY_LIGHT, fontWeight: 600, background: "transparent" }}>
+                              <code style={{ color: PRIMARY_LIGHT, fontWeight: 600, background: "transparent", color: "#001e94" }}>
                                 {invoice.invoiceId}
                               </code>
                             </div>
