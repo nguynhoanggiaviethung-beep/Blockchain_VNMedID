@@ -237,6 +237,12 @@ export default function DoctorDashboard() {
       setPatientList(prev =>
         prev.map(item => item._id === patient._id ? { ...item, status: "examining" } : item)
       )
+
+      if (typeof setCompletedList === "function") {
+        setCompletedList(prev =>
+          prev.map(item => item._id === patient._id ? { ...item, status: "examining" } : item)
+        )
+      }
       setSelectedPatient(nextPatient)
       setDiagnose('')
       setAccessStatus("none")
