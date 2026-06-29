@@ -276,7 +276,7 @@ export default function PatientDashboard() {
 
   const updateInvoiceStatusToFailed = async (invoiceId, reason) => {
     try {
-      await fetch(`${BASE_URL}/invoices/${invoiceId}/status`, {
+      const res = await fetch(`${BASE_URL}/invoices/${invoiceId}/status`, {
         method: 'PATCH',
         headers: {
           'Content-Type': 'application/json',
@@ -284,9 +284,50 @@ export default function PatientDashboard() {
         },
         body: JSON.stringify({ invoiceId, status: 'failed', reason })
       });
+
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        throw new Error(data.message || 'Server từ chối cập nhật trạng thái failed');
+      }
+
+      await loadInvoices();
     } catch (err) {
       console.error('Không thể cập nhật trạng thái failed lên server:', err);
     }
+  };
+
+  const getMetaMaskPaymentFailureMessage = (err) => {
+    const rawMessage = err?.data?.message || err?.message || String(err || "");
+    const message = rawMessage.toLowerCase();
+
+    if (err?.code === 4001) {
+      return {
+        shouldMarkFailed: false,
+        userMessage: "Thao tác hủy bỏ: Bạn đã chủ động hủy giao dịch trên ví MetaMask.",
+        reason: "User rejected transaction",
+      };
+    }
+
+    if (
+      err?.code === -32000 ||
+      err?.code === "INSUFFICIENT_FUNDS" ||
+      message.includes("insufficient funds") ||
+      message.includes("not enough funds") ||
+      message.includes("not enough balance") ||
+      message.includes("không đủ")
+    ) {
+      return {
+        shouldMarkFailed: true,
+        userMessage: "Giao dịch MetaMask thất bại: ví không đủ ETH để thanh toán viện phí và phí gas.",
+        reason: `MetaMask insufficient funds: ${rawMessage}`,
+      };
+    }
+
+    return {
+      shouldMarkFailed: true,
+      userMessage: rawMessage || "Xảy ra lỗi trong quá trình xử lý giao dịch.",
+      reason: `MetaMask transaction failed: ${rawMessage || "Unknown error"}`,
+    };
   };
 
   // 5. Xử lý thanh toán hóa đơn bằng ví Web3 MetaMask
@@ -301,6 +342,8 @@ export default function PatientDashboard() {
       );
       return;
     }
+
+    let paymentRequestStarted = false;
 
     try {
       setPayingId(invoice.invoiceId);
@@ -340,6 +383,7 @@ export default function PatientDashboard() {
       const finalCalldata =
         "0x" + selector + offsetPart + lengthPart + contentPart;
 
+      paymentRequestStarted = true;
       const txHash = await window.ethereum.request({
         method: "eth_sendTransaction",
         params: [
@@ -427,14 +471,12 @@ export default function PatientDashboard() {
         );
       }
     } catch (err) {
-      if (err.code === 4001)
-        setInvoiceError(
-          "Thao tác hủy bỏ: Bạn đã chủ động hủy giao dịch trên ví MetaMask.",
-        );
-      else
-        setInvoiceError(
-          err.message || "Xảy ra lỗi trong quá trình xử lý giao dịch.",
-        );
+      const failure = getMetaMaskPaymentFailureMessage(err);
+      setInvoiceError(failure.userMessage);
+
+      if (failure.shouldMarkFailed && paymentRequestStarted) {
+        await updateInvoiceStatusToFailed(invoice.invoiceId, failure.reason);
+      }
     } finally {
       setPayingId(null);
     }

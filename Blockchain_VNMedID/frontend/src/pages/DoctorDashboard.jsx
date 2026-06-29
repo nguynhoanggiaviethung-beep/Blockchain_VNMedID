@@ -215,6 +215,40 @@ export default function DoctorDashboard() {
     }
   }
 
+  const handleStartExam = async (patient) => {
+    if (!patient?._id) return
+
+    const nextPatient = { ...patient, status: "examining" }
+
+    try {
+      if (patient.status !== "examining") {
+        const res = await axiosOriginal.put(
+          `${BASE_URL}/visits/${patient._id}`,
+          { status: "examining" },
+          { headers: { Authorization: `Bearer ${token}` } }
+        )
+
+        if (!res.data?.success) {
+          alert(res.data?.message || "Không thể chuyển trạng thái sang đang khám.")
+          return
+        }
+      }
+
+      setPatientList(prev =>
+        prev.map(item => item._id === patient._id ? { ...item, status: "examining" } : item)
+      )
+      setSelectedPatient(nextPatient)
+      setDiagnose('')
+      setAccessStatus("none")
+      setBlockchainRecords([])
+      setExpandedBlock(null)
+      localStorage.setItem("current_exam_patient", JSON.stringify(nextPatient))
+      localStorage.setItem("current_exam_access_status", "none")
+    } catch (error) {
+      alert(error.response?.data?.message || "Có lỗi xảy ra khi bắt đầu khám.")
+    }
+  }
+
 
 
   const updateDrug = (index, field, value) => {
@@ -372,6 +406,7 @@ export default function DoctorDashboard() {
                   <tr><td colSpan={7} style={{ textAlign: "center", padding: "30px", color: GRAY_TEXT, fontStyle: "italic" }}>Không tìm thấy ca hẹn nào trong hệ thống.</td></tr>
                ) : displayList.map((p, i) => {
   const isCompleted = p.status === "completed"
+  const isExamining = p.status === "examining"
   const isExpanded = expandedCompletedRow === (p._id || i)
 
   return (
@@ -391,24 +426,25 @@ export default function DoctorDashboard() {
           {p.trieuChungLamSang || "Không có triệu chứng"}
         </td>
         <td style={{ padding: "14px 16px" }}>
-          <span style={{ fontSize: 12, padding: "4px 10px", borderRadius: 6, fontWeight: 600, background: isCompleted ? "#DEF7EC" : "#FEF3C7", color: isCompleted ? "#03543F" : "#92400E" }}>
-            {isCompleted ? "Đã hoàn thành" : "Chờ vào khám"}
+          <span style={{
+            fontSize: 12,
+            padding: "4px 10px",
+            borderRadius: 6,
+            fontWeight: 600,
+            background: isCompleted ? "#DEF7EC" : isExamining ? "#DBEAFE" : "#FEF3C7",
+            color: isCompleted ? "#03543F" : isExamining ? "#1D4ED8" : "#92400E"
+          }}>
+            {isCompleted ? "Đã hoàn thành" : isExamining ? "Đang khám" : "Chờ vào khám"}
           </span>
         </td>
         <td style={{ padding: "14px 16px" }}>
           {!isCompleted ? (
-            <button onClick={(e) => {
+            <button onClick={async (e) => {
               e.stopPropagation()
-              setSelectedPatient(p)
-              setDiagnose('')
-              setAccessStatus("none")
-              setBlockchainRecords([])
-              setExpandedBlock(null)
-              localStorage.setItem("current_exam_patient", JSON.stringify(p))
-              localStorage.setItem("current_exam_access_status", "none")
+              await handleStartExam(p)
             }}
               style={{ background: PRIMARY_MED, color: "#fff", border: "none", padding: "6px 14px", borderRadius: 6, cursor: "pointer", fontSize: 13, fontWeight: 600 }}>
-              Vào khám
+              {isExamining ? "Tiếp tục khám" : "Vào khám"}
             </button>
           ) : (
             <button

@@ -12,7 +12,7 @@ exports.createInvoice = async (req, res) => {
   try {
     const { invoiceId, amount, patientWallet, items, totalVND } = req.body;
 
-    const {hopitalName} = request.user;
+    const { hospitalName } = req.user || {};
 
     if (!invoiceId || !amount || !patientWallet) {
       return res.status(400).json({ success: false, message: 'Vui lòng nhập mã hóa đơn, số tiền và ví bệnh nhân' });
@@ -256,7 +256,8 @@ exports.getAllInvoices = async (req, res) => {
 
 exports.updateInvoiceStatus = async (req, res) => {
   try {
-    const { invoiceId, status, reason } = req.body;
+    const { status, reason } = req.body;
+    const invoiceId = req.body.invoiceId || req.params.id;
 
     if (!invoiceId || !status) {
       return res.status(400).json({ success: false, message: 'Vui lòng cung cấp invoiceId và status' });
