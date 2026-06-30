@@ -1,49 +1,45 @@
-const mongoose = require('mongoose');
-const jwt = require('jsonwebtoken');
-const bcrypt = require('bcrypt');
+const { getContractInstance } = require("../config/web3");
+const mongoose = require("mongoose");
+const jwt = require("jsonwebtoken");
+const bcrypt = require("bcrypt");
+
 
 const register = async (req, res) => {
   try {
-    const { fullName, email, password, role, dob, gender, phone, specialty, doctorId, licenseNumber } = req.body;
+    const { fullName, email, password, role, dob, gender, phone, specialty, licenseNumber, hospitalName } = req.body;
     const db = mongoose.connection.db;
 
-    const existing = await db.collection('users').findOne({ email });
+    const existing = await db.collection("users").findOne({ email });
     if (existing) {
-      return res.status(400).json({ success: false, message: 'Email đã tồn tại!' });
+      return res.status(400).json({ success: false, message: "Email đã tồn tại!" });
     }
 
-    const hashedPassword = await bcrypt.hash(password, 10);
     const commonId = new mongoose.Types.ObjectId();
-    await db.collection('users').insertOne({
-      _id: commonId,
-      fullName, email, password: hashedPassword,
-      role: role || 'doctor',
-      createdAt: new Date(),
-      updatedAt: new Date()
+    const hashedPassword = await bcrypt.hash(password, 10);
+
+    await db.collection("users").insertOne({
+      _id: commonId, fullName, email,
+      password: hashedPassword, role: role || "doctor",
+      hospitalName: hospitalName || null,
+      createdAt: new Date(), updatedAt: new Date(),
     });
-    if (role === 'doctor') {
-      await db.collection('doctors').insertOne({
-        _id: commonId,
-        fullName,
-        email,
-        dob,
-        gender,
-        phone,
-        specialty,
-        licenseNumber,
-        createdAt: new Date(),
-        updatedAt: new Date()
+
+    if (role === "doctor") {
+      await db.collection("doctors").insertOne({
+        _id: commonId, fullName, email,
+        dob, gender, phone, specialty, licenseNumber, hospitalName,
+        createdAt: new Date(), updatedAt: new Date(),
       });
     }
 
     return res.status(201).json({
       success: true,
-      message: 'Tạo tài khoản thành công và đã đồng bộ dữ liệu vai trò !',
-      data: { userId: commonId, fullName, email, role }
+      message: "Tạo tài khoản thành công!",
+      data: { userId: commonId, fullName, email, role },
     });
-
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    console.error(error);
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
   }
 };
 
@@ -52,109 +48,247 @@ const login = async (req, res) => {
     const { email, password, role } = req.body;
     const db = mongoose.connection.db;
 
-    if (!db) {
-      return res.status(500).json({ success: false, message: 'Database chưa sẵn sàng!' });
-    }
+    if (!db) return res.status(500).json({ success: false, message: "Database chưa sẵn sàng!" });
 
-    const user = await db.collection('users').findOne({ email });
-    if (!user) {
-      return res.status(401).json({ success: false, message: 'Tài khoản không tồn tại!' });
-    }
+    const user = await db.collection("users").findOne({ email });
+    if (!user) return res.status(401).json({ success: false, message: "Tài khoản không tồn tại!" });
 
     if (user.role !== role) {
       return res.status(403).json({ success: false, message: `Tài khoản không có quyền đăng nhập với tư cách ${role}!` });
     }
 
     const isMatch = await bcrypt.compare(password, user.password).catch(() => false);
-    if (!isMatch) {
-      return res.status(401).json({ success: false, message: 'Mật khẩu không chính xác!' });
+    if (!isMatch) return res.status(401).json({ success: false, message: "Mật khẩu không chính xác!" });
+
+    const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";
+    
+    // ✅ LỒNG GHÉP: Xử lý hospitalName để phân quyền Admin bệnh viện
+    let hospitalName = user.hospitalName || null;
+    if (role === 'doctor') {
+        const doctorProfile = await db.collection("doctors").findOne({ _id: user._id });
+        hospitalName = doctorProfile ? doctorProfile.hospitalName : null;
     }
 
-    const secretKey = process.env.JWT_SECRET || 'vnmedid_super_secret_key_2024';
-    const token = jwt.sign({ userId: user._id, role }, secretKey, { expiresIn: '7d' });
+    // ✅ SỬA: Đưa hospitalName vào Token để Backend dùng lọc dữ liệu
+    const token = jwt.sign({ 
+        userId: user._id, 
+        role, 
+        hospitalName 
+    }, secretKey, { expiresIn: "7d" });
 
     return res.status(200).json({
-    success: true,
-    message: 'Đăng nhập thành công!',
-    data: { 
-        token, 
-        role, 
-        fullName: user.fullName || 'Người dùng VNmedID',
-        userId: user._id  
-    }
-});
-
+      success: true,
+      message: "Đăng nhập thành công!",
+      data: {
+        token, role,
+        fullName: user.fullName || "Người dùng VNmedID",
+        userId: user._id,
+        hospitalName, // ✅ Trả về Frontend để hiển thị
+        walletAddress: user.walletAddress || null,
+      },
+    });
   } catch (error) {
-    return res.status(500).json({ success: false, message: 'Lỗi server', error: error.message });
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
   }
 };
 
 const registerPatient = async (req, res) => {
-    try {
-        const { email, password, fullName, dob, gender, phone, address, citizenId } = req.body;
+  try {
+    const { email, password, fullName, dob, gender, phone, address, citizenId, walletAddress, isVerified } = req.body;
 
-        if (!email || !password || !fullName || !citizenId) {
-            return res.status(400).json({
-                success: false,
-                message: 'Vui lòng điền đầy đủ thông tin bắt buộc!'
-            });
-        }
-
-        const db = mongoose.connection.db;
-
-        // Kiểm tra email đã tồn tại chưa
-        const emailDaTon = await db.collection('users').findOne({ email });
-        if (emailDaTon) {
-            return res.status(400).json({
-                success: false,
-                message: 'Email này đã được đăng ký!'
-            });
-        }
-
-        // Kiểm tra CCCD đã tồn tại chưa
-        const cccdDaTon = await db.collection('patients').findOne({ citizenId });
-        if (cccdDaTon) {
-            return res.status(400).json({
-                success: false,
-                message: 'Số CCCD này đã được đăng ký!'
-            });
-        }
-
-        // Dùng chung 1 ID cho cả 2 bảng
-        const commonId = new mongoose.Types.ObjectId();
-        const matKhauMaHoa = await bcrypt.hash(password, 10);
-
-        // Lưu vào bảng users
-        await db.collection('users').insertOne({
-            _id: commonId,
-            fullName, email,
-            password: matKhauMaHoa,
-            role: 'patient',
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
-
-        // Lưu vào bảng patients
-        await db.collection('patients').insertOne({
-            _id: commonId,
-            fullName, dob, gender, phone, address, citizenId,
-            createdAt: new Date(),
-            updatedAt: new Date()
-        });
-
-        return res.status(201).json({
-            success: true,
-            message: 'Đăng ký tài khoản bệnh nhân thành công!',
-            data: { userId: commonId, fullName, email, role: 'patient' }
-        });
-
-    } catch (error) {
-        return res.status(500).json({
-            success: false,
-            message: 'Lỗi hệ thống',
-            error: error.message
-        });
+    if (!email || !password || !fullName || !citizenId) {
+      return res.status(400).json({ success: false, message: "Vui lòng điền đầy đủ thông tin bắt buộc!" });
     }
+
+    const db = mongoose.connection.db;
+
+    const emailDaTon = await db.collection("users").findOne({ email });
+    if (emailDaTon) return res.status(400).json({ success: false, message: "Email này đã được đăng ký!" });
+
+    const cccdDaTon = await db.collection("patients").findOne({ citizenId });
+    if (cccdDaTon) return res.status(400).json({ success: false, message: "Số CCCD này đã được đăng ký!" });
+
+    const commonId = new mongoose.Types.ObjectId();
+    const matKhauMaHoa = await bcrypt.hash(password, 10);
+
+    await db.collection("users").insertOne({
+      _id: commonId, fullName, email,
+      password: matKhauMaHoa, role: "patient",
+      walletAddress: walletAddress || null,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    await db.collection("patients").insertOne({
+      _id: commonId, fullName, dob, gender,
+      phone, address, citizenId,
+      isVerified: isVerified || false,
+      cccdVerifiedAt: isVerified ? new Date() : null,
+      walletAddress: walletAddress || null,
+      createdAt: new Date(), updatedAt: new Date(),
+    });
+
+    try {
+      if (walletAddress) {
+        const userRegistry = getContractInstance("userRegistry");
+        const tx = await userRegistry.registerUser(walletAddress, commonId.toString(), 1); // 1 = patient
+        await tx.wait();
+        console.log("✅ Đăng ký người dùng trên blockchain thành công. TX Hash:", tx.hash);
+      }
+    } catch (blockchainError) {
+      console.error("Lỗi khi đăng ký người dùng trên blockchain:", blockchainError.message
+      );
+
+    }
+
+    return res.status(201).json({
+      success: true,
+      message: "Đăng ký tài khoản bệnh nhân thành công!",
+      data: { userId: commonId, fullName, email, role: "patient" },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi hệ thống", error: error.message });
+  }
 };
 
-module.exports = { register, login, registerPatient };
+// ✅ Đăng nhập bằng ví MetaMask
+const loginWithWallet = async (req, res) => {
+  try {
+    const { walletAddress, selectedRole } = req.body;
+    if (!walletAddress) {
+      return res.status(400).json({ success: false, message: "Vui lòng cung cấp địa chỉ ví!" });
+    }
+
+    const db = mongoose.connection.db;
+
+    const user = await db.collection("users").findOne({
+      walletAddress: { $regex: new RegExp(`^${walletAddress}$`, 'i') }
+    });
+
+    if (!user) {
+      return res.status(404).json({ success: false, message: "Không tìm thấy tài khoản liên kết với ví này! Vui lòng đăng nhập bằng email trước." });
+    }
+
+    if (selectedRole && user.role !== selectedRole) {
+      const roleNameVi = selectedRole === 'doctor' ? 'Bác sĩ' : selectedRole === 'patient' ? 'Bệnh nhân' : 'Admin';
+      return res.status(403).json({ 
+        success: false, 
+        message: `Ví này đã được liên kết với tài khoản có quyền [${user.role === 'patient' ? 'Bệnh nhân' : 'Bác sĩ'}]. Bạn không thể đăng nhập với tư cách ${roleNameVi}!` 
+      });
+    }
+
+    try {
+      const userRegistry = getContractInstance("userRegistry");
+      
+      // Chuyển đổi role chữ thành mã uint8 tương ứng trong Contract của bạn
+      const roleMapUint8 = { "patient": 1, "doctor": 2, "admin": 3 };
+      const currentRoleUint8 = roleMapUint8[user.role] || 0;
+
+      // Gọi hàm kiểm tra trên Smart Contract
+      const isAuthorized = await userRegistry.isAuthorizedRole(walletAddress, currentRoleUint8);
+
+      if (!isAuthorized) {
+        return res.status(403).json({
+          success: false,
+          message: "Xác thực Blockchain thất bại! Ví của bạn chưa được kích hoạt quyền hoặc đã bị vô hiệu hóa trên Smart Contract."
+        });
+      }
+      console.log(`📡 [Blockchain] Xác nhận ví ${walletAddress} có quyền ${user.role} hợp lệ.`);
+    } catch (contractErr) {
+      console.error("❌ Lỗi truy vấn Smart Contract tại loginWithWallet:", contractErr.message);
+      // Bạn có thể chọn chặn lại hoặc cho qua tùy mức độ nghiêm ngặt khi node bị sập
+      return res.status(500).json({ success: false, message: "Hệ thống Blockchain không phản hồi, vui lòng thử lại sau!", error: contractErr.message });
+    }
+
+    const secretKey = process.env.JWT_SECRET || "vnmedid_super_secret_key_2024";
+    const token = jwt.sign({ userId: user._id, role: user.role }, secretKey, { expiresIn: "7d" });
+
+    return res.status(200).json({
+      success: true,
+      message: "Đăng nhập bằng ví thành công!",
+      data: {
+        token, role: user.role,
+        fullName: user.fullName || "Người dùng VNmedID",
+        userId: user._id,
+        walletAddress: user.walletAddress,
+      },
+    });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+// ✅ Lưu ví MetaMask — sửa req.user.id → req.user.userId
+const saveWallet = async (req, res) => {
+  try {
+    const { walletAddress } = req.body;
+    if (!walletAddress) {
+      return res.status(400).json({ success: false, message: "Vui lòng cung cấp địa chỉ ví!" });
+    }
+
+    const db = mongoose.connection.db;
+
+    // ✅ FIX: dùng req.user.userId (khớp với authMiddleware)
+    const userId = new mongoose.Types.ObjectId(req.user.userId);
+
+    await db.collection("users").updateOne(
+      { _id: userId },
+      { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+    );
+    const user = await db.collection("users").findOne({
+      _id: userId
+  });
+  try {
+    const userRegistry = getContractInstance("userRegistry");
+    let role = 1;
+    if (user.role === "doctor") {
+      role = 2;
+    }
+    if (user.role === "admin") {
+      role = 3;
+    }
+    
+    const tx = await userRegistry.registerUser(
+      walletAddress,
+      userId.toString(),
+      role
+    );
+
+    await tx.wait();
+
+    console.log(
+      "✅ UserRegistry TX:",
+      tx.hash,
+    );
+
+  } catch (err) {
+    console.error( "❌ UserRegistry Error:",
+      err.message
+    ); 
+  }
+
+    await db.collection("patients").updateOne(
+      { _id: userId },
+      { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+    );
+    await db.collection("patients").updateOne(
+  { _id: userId },
+  { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+);
+
+// Cập nhật luôn vào doctors nếu là bác sĩ
+if (user.role === "doctor") {
+  await db.collection("doctors").updateOne(
+    { _id: userId },
+    { $set: { walletAddress: walletAddress, updatedAt: new Date() } }
+  );
+  console.log("✅ Đã cập nhật walletAddress vào doctors");
+}
+
+
+    return res.status(200).json({ success: true, message: "Lưu ví thành công!", data: { walletAddress } });
+  } catch (error) {
+    return res.status(500).json({ success: false, message: "Lỗi server", error: error.message });
+  }
+};
+
+module.exports = { register, login, registerPatient, loginWithWallet, saveWallet };

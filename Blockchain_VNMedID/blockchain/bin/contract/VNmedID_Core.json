@@ -1,0 +1,236 @@
+{
+  "contractName": "VNmedID_Core",
+  "address": "0xf0322897126173E4DD8E454355dB8C52c57ECb7b",
+  "abi": [
+    {
+      "type": "constructor",
+      "stateMutability": "undefined",
+      "payable": false,
+      "inputs": []
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AccessGranted",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId",
+          "indexed": false
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "timestamp",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "AccessRevoked",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId",
+          "indexed": false
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "timestamp",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "event",
+      "anonymous": false,
+      "name": "RecordAdded",
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId",
+          "indexed": false
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet",
+          "indexed": false
+        },
+        {
+          "type": "string",
+          "name": "recordHash",
+          "indexed": false
+        },
+        {
+          "type": "uint256",
+          "name": "timestamp",
+          "indexed": false
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "addRecordHash",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        },
+        {
+          "type": "string",
+          "name": "recordHash"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "admin",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [],
+      "outputs": [
+        {
+          "type": "address",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "checkMyPermission",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "checkPermission",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "doctorAccess",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": ""
+        },
+        {
+          "type": "address",
+          "name": ""
+        }
+      ],
+      "outputs": [
+        {
+          "type": "bool",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "getRecordHashes",
+      "constant": true,
+      "stateMutability": "view",
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        }
+      ],
+      "outputs": [
+        {
+          "type": "string[]",
+          "name": ""
+        }
+      ]
+    },
+    {
+      "type": "function",
+      "name": "grantAccess",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet"
+        }
+      ],
+      "outputs": []
+    },
+    {
+      "type": "function",
+      "name": "revokeAccess",
+      "constant": false,
+      "payable": false,
+      "inputs": [
+        {
+          "type": "string",
+          "name": "patientId"
+        },
+        {
+          "type": "address",
+          "name": "doctorWallet"
+        }
+      ],
+      "outputs": []
+    }
+  ],
+  "network": "sepolia",
+  "chainId": "11155111",
+  "deployedAt": "2026-06-05T17:16:01.581Z",
+  "deploymentTx": "0xd8b7863a235443fbb56c034daa8b74691511247d0a7d9d379380b5b31ca9ee2c"
+}

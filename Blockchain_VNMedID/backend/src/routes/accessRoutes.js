@@ -1,23 +1,23 @@
 const express = require('express');
 const router = express.Router();
-// Import middleware bạn vừa viết
+const accessController = require('../controllers/accessController');
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
 
-// Route này ai đăng nhập cũng vào được
-router.get('/profile', xacThucToken, (req, res) => {
-    res.json({ message: "Chào người dùng:", user: req.user });
-});
+// Khớp 100% với Frontend gọi POST /api/v1/access/requests (Sửa lỗi 404)
+router.post('/requests', xacThucToken, phanQuyen('doctor'), accessController.requestAccess);
 
-// Route này chỉ Bác sĩ mới được POST hồ sơ
-router.post('/add-record', xacThucToken, phanQuyen('doctor'), (req, res) => {
-    // Code xử lý thêm bệnh án vào đây
-    res.json({ message: "Bác sĩ đã thêm hồ sơ thành công!" });
-});
+// Frontend gọi GET /api/v1/access/requests/my
+router.get('/requests/my', xacThucToken, phanQuyen('patient'), accessController.getPendingRequestsForPatient);
 
-// Route này chỉ Admin mới được xóa dữ liệu
-router.delete('/delete-record/:id', xacThucToken, phanQuyen('admin'), (req, res) => {
-    // Code xóa hồ sơ
-    res.json({ message: "Admin đã xóa hồ sơ." });
-});
+// Frontend gọi phê duyệt POST /api/v1/access/requests/:id/approve
+router.post('/requests/:id/approve', xacThucToken, phanQuyen('patient'), accessController.grantAccess);
+
+// Frontend gọi từ chối POST /api/v1/access/requests/:id/reject
+router.post('/requests/:id/reject', xacThucToken, phanQuyen('patient'), accessController.rejectAccess);
+// Bệnh nhân chủ động thu hồi quyền PUT /api/v1/access/requests/:id/revoke
+router.put('/requests/:id/revoke', xacThucToken, phanQuyen('patient'), accessController.revokeAccessByPatient);
+
+// Frontend gọi lấy quyền bác sĩ GET /api/v1/access/requests/active-for-doctor
+router.get('/requests/active-for-doctor', xacThucToken, phanQuyen('doctor'), accessController.getActiveRequestsForDoctor);
 
 module.exports = router;

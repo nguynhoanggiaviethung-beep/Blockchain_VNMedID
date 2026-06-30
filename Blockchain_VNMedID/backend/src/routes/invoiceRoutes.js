@@ -1,12 +1,16 @@
 const express = require('express');
 const router = express.Router();
 const { xacThucToken, phanQuyen } = require('../middleware/authMiddleware');
-const { createInvoice, makePayment } = require('../controllers/invoiceController');
+const { createInvoice, makePayment, getMyInvoices, getInvoiceById, getAllInvoices, updateInvoiceStatus } = require('../controllers/invoiceController');
 
-// Tạo hóa đơn — chỉ Admin
+router.get('/my', xacThucToken, phanQuyen('patient'), getMyInvoices);
+router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment); // ← LÊN TRƯỚC
 router.post('/', xacThucToken, phanQuyen('admin'), createInvoice);
+router.get('/', xacThucToken, phanQuyen('admin'), getAllInvoices);
 
-// Thanh toán — Patient
-router.post('/payments', xacThucToken, phanQuyen('patient'), makePayment);
+router.patch('/:id/status', xacThucToken, phanQuyen('admin', 'patient'), updateInvoiceStatus);
+
+router.get('/:id', xacThucToken, phanQuyen('patient', 'admin'), getInvoiceById); // ← XUỐNG SAU
+
 
 module.exports = router;

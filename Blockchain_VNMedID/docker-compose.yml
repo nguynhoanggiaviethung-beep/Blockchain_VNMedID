@@ -1,16 +1,48 @@
 services:
-
-  frontend:
-    build: ./frontend
+  mongo:
+    image: mongo:7
+    container_name: vnmedid_mongo
     ports:
-      - "5173:5173"
+      - "27017:27017"
+    volumes:
+      - mongo_data:/data/db
+    networks:
+      - vnmedid_network
 
   backend:
     build: ./backend
+    container_name: vnmedid_backend
     ports:
       - "5000:5000"
+    environment:
+      - PORT=5000
+      - MONGODB_URI=mongodb://mongo:27017/vnmedid
+      - JWT_SECRET=medical_blockchain_secret
+      - SEPOLIA_RPC_URL=${SEPOLIA_RPC_URL}
+      - ADMIN_PRIVATE_KEY=${ADMIN_PRIVATE_KEY}
+      - CONTRACT_USER=${CONTRACT_USER}
+    depends_on:
+      - mongo
+    networks:
+      - vnmedid_network
+    restart: unless-stopped
 
-  mongo:
-    image: mongo
+  frontend:
+    build: ./frontend
+    container_name: vnmedid_frontend
     ports:
-      - "27017:27017"
+      - "5173:5173"
+    environment:
+      - VITE_API_URL=https://blockchain-vnmedid.onrender.com/api/v1
+    depends_on:
+      - backend
+    networks:
+      - vnmedid_network
+    restart: unless-stopped
+
+volumes:
+  mongo_data:
+
+networks:
+  vnmedid_network:
+    driver: bridge

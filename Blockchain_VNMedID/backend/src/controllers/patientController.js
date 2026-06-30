@@ -46,21 +46,71 @@ const createPatient = async (req, res) => {
 // ==========================================
 const getAllPatients = async (req, res) => {
     try {
-        // Hỗ trợ tìm kiếm theo tên hoặc CCCD
         const { search } = req.query;
-        let filter = {};
+        const { hospitalName } = req.user;
+
+        const matchStage = {};
 
         if (search) {
-            filter = {
-                $or: [
-                    { fullName: { $regex: search, $options: 'i' } },
-                    { citizenId: { $regex: search, $options: 'i' } },
-                    { phone: { $regex: search, $options: 'i' } }
-                ]
-            };
+            matchStage.$or = [
+                { fullName: { $regex: search, $options: 'i' } },
+                { citizenId: { $regex: search, $options: 'i' } },
+                { phone: { $regex: search, $options: 'i' } }
+            ];
         }
 
-        const danhSach = await Patient.find(filter).sort({ createdAt: -1 });
+        const pipeline = [
+            { $match: matchStage },
+
+            // Join với collection visits
+            {
+                $lookup: {
+                    from: 'visits',
+                    let: { pid: { $toString: '$_id' } },
+                    pipeline: [
+                        {
+                            $match: {
+                                $expr: {
+                                    $and: [
+                                        { $eq: ['$patientId', '$$pid'] },
+                                        ...(hospitalName
+                                            ? [{
+                                                $regexMatch: {
+                                                    input: '$hospitalName',
+                                                    regex: hospitalName,
+                                                    options: 'i'
+                                                }
+                                            }]
+                                            : [])
+                                    ]
+                                }
+                            }
+                        },
+                        { $sort: { createdAt: -1 } },
+                        { $limit: 1 },
+                        { $project: { hospitalName: 1, _id: 0 } }
+                    ],
+                    as: 'latestVisit'
+                }
+            },
+
+            // Nếu filter theo hospital thì chỉ giữ bệnh nhân có visit ở đó
+            ...(hospitalName
+                ? [{ $match: { 'latestVisit.0': { $exists: true } } }]
+                : []),
+
+            // Gán hospitalName từ visit vào kết quả
+            {
+                $addFields: {
+                    hospitalName: { $ifNull: [{ $arrayElemAt: ['$latestVisit.hospitalName', 0] }, null] }
+                }
+            },
+
+            { $unset: 'latestVisit' },
+            { $sort: { createdAt: -1 } }
+        ];
+
+        const danhSach = await Patient.aggregate(pipeline);
 
         return res.status(200).json({
             success: true,
@@ -115,11 +165,11 @@ const getPatientById = async (req, res) => {
 // ==========================================
 const updatePatient = async (req, res) => {
     try {
-        const { fullName, dob, gender, phone, address } = req.body;
+        const { fullName, dob, gender, phone, address, nhomMau, tienSuBenh, diUng, trieuChung, ghiChu } = req.body;
 
         const benhNhan = await Patient.findByIdAndUpdate(
             req.params.id,
-            { fullName, dob, gender, phone, address },
+            { fullName, dob, gender, phone, address, nhomMau, tienSuBenh, diUng, trieuChung, ghiChu },
             { new: true, runValidators: true }
         );
 
