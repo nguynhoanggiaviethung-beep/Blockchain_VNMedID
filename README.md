@@ -60,8 +60,6 @@ Blockchain đóng vai trò là một **Lớp hạ tầng xác thực dữ liệu
 
 Để giải bài toán hiệu năng tốc độ xử lý UI/UX và chi phí lưu trữ đắt đỏ trên Blockchain, hệ thống phân tách nghiêm ngặt thành 2 lớp xử lý:
 
-Để giải bài toán hiệu năng tốc độ xử lý UI/UX và chi phí lưu trữ đắt đỏ trên Blockchain, hệ thống phân tách nghiêm ngặt thành 2 lớp xử lý:
-
 ```mermaid
 
 graph TD
