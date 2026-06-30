@@ -308,21 +308,14 @@ export default function DoctorDashboard() {
         alert("🎉 Lưu hồ sơ bệnh án thành công!")
         const finishedId = selectedPatient._id;
         resetForm()
-        setSelectedPatient(null) // Xóa bệnh nhân đang chọn để đóng khung nhập đơn thuốc
+        setSelectedPatient(null) // Xóa bệnh nhân đang chọn để đóng khung nhập đơn thuốc\
+        setDiagnose('')
+        setDoctorNote('')
+        setDrugList([])
         localStorage.removeItem("current_exam_patient") // Xóa cache local storage ca cũ
         localStorage.removeItem("current_exam_access_status")
         setPatientList(prev => prev.filter(item => item._id !== finishedId));
 
-        if (typeof setCompletedList === "function") {
-          const completedPatient = { 
-            ...selectedPatient, 
-            status: "completed", 
-            chanDoanChuyenMon: diagnose, 
-            huongDieuTri: prescriptionText 
-          };
-          setCompletedList(prev => [completedPatient, ...prev]);
-        }
-        
         await fetchPatients(doctorInfo.specialty, selectedDate)
       }
     } catch  {
