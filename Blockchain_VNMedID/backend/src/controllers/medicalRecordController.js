@@ -394,7 +394,7 @@ chanDoanChuyenMon: diagnose,
             console.log(`[Blockchain] Gửi hash bệnh án lên Sepolia cho PatientKey: ${targetPatientKey}`);
             const medicalContract = getContractInstance('medicalRecord');
 
-            const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0x66Bd396353701d97a7C21A23f57044761133dcD5";
+            const backendSignerAddress = medicalContract.runner ? medicalContract.runner.address : "0xeD8F3cA220C85Bd7976fB0136f72B6b5aB3CB85c";
             console.log(`[Blockchain] Địa chỉ thực hiện giao dịch (Hospital/Admin): ${backendSignerAddress}`);
 
             const tx = await medicalContract.addRecordHash(
@@ -495,7 +495,7 @@ const getOnChainRecord = async (req, res) => {
             success: true,
             data: {
                 patientAddress,
-                hospitalAddress: "0x66Bd396353701d97a7C21A23f57044761133dcD5",
+                hospitalAddress: "0xeD8F3cA220C85Bd7976fB0136f72B6b5aB3CB85c",
                 history: historyList
             }
         });
