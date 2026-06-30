@@ -16,7 +16,7 @@
 Hệ thống hoạt động dựa trên cấu trúc **Mô Hình Lai (Hybrid Layer)** kết hợp cơ sở dữ liệu truyền thống (Off-chain) hiệu năng cao và mạng lưới Blockchain Ethereum Sepolia (On-chain) để bảo vệ tính toàn vẹn dữ liệu, giải quyết triệt để bài toán bảo mật thông tin nhạy cảm theo xu hướng chuyển đổi số y tế toàn dân.
 
 > [!IMPORTANT]
-> **HÀM LƯỢNG PHÁP LÝ TỐI CAO:** VNmedID được nghiên cứu và thiết kế cấu trúc tuân thủ nghiêm ngặt theo **Nghị định số 13/2023/NĐ-CP** của Chính phủ về bảo vệ dữ liệu cá nhân, đảm bảo quyền sở hữu dữ liệu tuyệt đối thuộc về chủ thể dữ liệu (Bệnh nhân).
+> **TÍNH PHÁP LÝ:** VNmedID được nghiên cứu và thiết kế cấu trúc tuân thủ nghiêm ngặt theo **Nghị định số 13/2023/NĐ-CP** của Chính phủ về bảo vệ dữ liệu cá nhân, đảm bảo quyền sở hữu dữ liệu tuyệt đối thuộc về chủ thể dữ liệu (Bệnh nhân).
 
 ---
 
